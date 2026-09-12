@@ -1,0 +1,257 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  username       String   @unique
+  passwordHash   String
+  currentStreak  Int      @default(0)
+  longestStreak  Int      @default(0)
+  lastLoggedDate DateTime?
+  createdAt      DateTime @default(now())
+  statsVisibility String  @default("public") // "public" | "friends" | "nobody"
+  equippedHat    String?  // hat ID
+  equippedJacket String?  // jacket ID
+  equippedAccessory String?  // accessory ID
+  ownedItems     String  @default("[]")  // JSON array of owned item IDs
+  
+  // Onboarding fields
+  age            Int?     // User's age
+  gender         String?  // "male" | "female" | "prefer-not-to-say"
+  displayName    String?  // Custom name for greetings (e.g., "Alex")
+  onboardingCompleted Boolean @default(false)
+  
+  // New currency system
+  elo            Int      @default(0)     // Exercise points (earned from logging exercises)
+  gp             Int      @default(0)     // Game points (earned from ELO, used for game purchases)
+  coins          Int      @default(0)     // Shop currency (earned from winning games)
+  
+  // Challenge & Workout tracking
+  totalDailyChallengesDone Int @default(0) // Total daily challenges completed
+  totalWorkoutDaysDone     Int @default(0) // Total unique days with workouts logged
+  dailyChallengeStreak     Int @default(0) // Current daily challenge streak
+  
+  // Game data
+  maxGameLevelReached Int @default(1) // Highest level completed in Rep Defender
+  
+  logs           Log[]
+
+  sentRequests     Friendship[] @relation("requester")
+  receivedRequests Friendship[] @relation("addressee")
+  friendNotifications FriendNotificationPreference[] @relation("user")
+  sentNotifications   Notification[] @relation("recipient")
+  challengeCompletions ChallengeCompletion[]
+  createdExercises Exercise[]
+  gameRuns         GameRun[]
+  dailyChallenges  DailyChallenge[]
+  reviews          Review[] @relation("author")
+  sentGifts        Gift[] @relation("sentGifts")
+  receivedGifts    Gift[] @relation("receivedGifts")
+  createdBets      Bet[] @relation("betCreator")
+  acceptedBets     Bet[] @relation("betAccepter")
+  sentCompliments ComplimentCooldown[] @relation("complimentSender")
+  receivedCompliments ComplimentCooldown[] @relation("complimentRecipient")
+}
+
+model Friendship {
+  id          String   @id @default(uuid())
+  requesterId String
+  addresseeId String
+  status      String   @default("pending") // "pending" | "accepted"
+  createdAt   DateTime @default(now())
+
+  requester User @relation("requester", fields: [requesterId], references: [id], onDelete: Cascade)
+  addressee User @relation("addressee", fields: [addresseeId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, addresseeId])
+}
+
+model Bet {
+  id          String   @id @default(uuid())
+  creatorId   String   // who created the bet
+  accepterId  String?  // who accepted (null if pending)
+  exerciseId  String   // which exercise
+  targetReps  Int      // how many reps to do
+  deadline    DateTime // when it expires
+  coinsBet    Int      // how many coins are wagered
+  status      String   @default("pending") // "pending", "accepted", "denied", "expired", "completed", "failed", "both_failed"
+  creatorProgress Int  @default(0) // reps completed by creator
+  accepterProgress Int @default(0) // reps completed by accepter
+  dismissedAt DateTime? // when the bet was dismissed by the user
+  createdAt   DateTime @default(now())
+
+  creator   User      @relation("betCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  accepter  User?     @relation("betAccepter", fields: [accepterId], references: [id], onDelete: Cascade)
+  exercise  Exercise  @relation(fields: [exerciseId], references: [id])
+
+  @@index([creatorId, status])
+  @@index([accepterId, status])
+}
+
+model Exercise {
+  id             String  @id @default(uuid())
+  name           String  // display name, original casing
+  normalizedName String  @unique // lowercase/trimmed, used to detect "same exercise" across users
+  category       String  // "upper", "lower", "core", "custom"
+  unit           String  // "reps" or "seconds"
+  isOfficial     Boolean @default(true)
+  isPublic       Boolean @default(true) // custom exercises start false, promoted once 2+ distinct users log it
+  createdByUserId String?
+
+  createdBy User? @relation(fields: [createdByUserId], references: [id])
+  logs      Log[]
+  dailyChallenges DailyChallenge[]
+  troopTypes TroopType[]
+  bets      Bet[]
+}
+
+model Log {
+  id         String   @id @default(uuid())
+  userId     String
+  exerciseId String
+  amount     Int      // total amount (reps x sets, or just amount for time-based)
+  reps       Int?     // reps per set (optional, for rep-based exercises)
+  sets       Int?     // number of sets (optional, default 1 if not specified)
+  loggedAt   DateTime @default(now())
+  date       DateTime // truncated to midnight UTC, used for day-grouping / streaks
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise Exercise @relation(fields: [exerciseId], references: [id])
+
+  @@index([exerciseId])
+  @@index([userId, date])
+}
+
+model DailyChallenge {
+  id           String   @id @default(uuid())
+  userId       String
+  date         DateTime // one challenge per user per calendar day
+  exerciseId   String
+  targetAmount Int
+  isTrySomethingNew Boolean @default(false)
+
+  user        User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise    Exercise               @relation(fields: [exerciseId], references: [id])
+  completions ChallengeCompletion[]
+
+  @@unique([userId, date])
+}
+
+model ChallengeCompletion {
+  id          String   @id @default(uuid())
+  userId      String
+  challengeId String
+  completedAt DateTime @default(now())
+  difficulty  String?  // "easy", "medium", "hard" - user's perceived difficulty
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge DailyChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+}
+
+model GameRun {
+  id          String   @id @default(uuid())
+  userId      String
+  difficulty  String   // "easy", "medium", "hard"
+  levelReached Int     @default(1)
+  coinsEarned Int      @default(0)  // Coins earned from this run
+  result      String   // "win", "loss"
+  isInfinityMode Boolean @default(false) // Whether this was an infinity mode run
+  playedAt    DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model TroopType {
+  id           String  @id @default(uuid())
+  exerciseId   String? // null for generic custom exercise troop
+  name         String
+  damage       Int
+  cost         Int
+  attackSpeed  Float   // attacks per second
+  maxHits      Int     @default(3) // how many hits before troop dies
+  difficultyTier String // "low", "medium", "high"
+  color        String  @default("#4ECDC4") // color for visual representation
+  shape        String  @default("circle") // shape: "circle", "square", "triangle", "star"
+
+  exercise Exercise? @relation(fields: [exerciseId], references: [id])
+}
+
+model FriendNotificationPreference {
+  id        String   @id @default(uuid())
+  userId    String
+  friendId  String
+  enabled   Boolean  @default(true) // whether to send notifications about this friend
+  createdAt DateTime @default(now())
+
+  user User @relation("user", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, friendId])
+}
+
+model Notification {
+  id          String   @id @default(uuid())
+  recipientId String
+  type        String   // "friend_catching_up", "streak_milestone", "missed_day", "streak_broken", "gift_received", "compliment"
+  message     String   // Full notification message
+  metadata    String?  // JSON string with additional data (e.g., friend username, amounts, itemId, senderId)
+  isRead      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  recipient User @relation("recipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, isRead])
+}
+
+model Gift {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String
+  itemId      String   // hat-id, jacket-id, accessory-id
+  itemName    String   // Display name of the item
+  itemCost    Int      // Original cost in coins
+  message     String?  // Optional gift message
+  claimedAt   DateTime? // When the recipient claimed it
+  createdAt   DateTime @default(now())
+
+  sender    User @relation("sentGifts", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("receivedGifts", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, claimedAt])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  authorId    String
+  rating      Int      // 1-5 stars
+  title       String   // Review title
+  description String   // Review description (max 500 words)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author User @relation("author", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([authorId])
+}
+
+model ComplimentCooldown {
+  id          String   @id @default(uuid())
+  senderId    String
+  recipientId String
+  lastSentAt  DateTime @default(now())
+  cooldownEndsAt DateTime // When the cooldown ends (1 hour after lastSentAt by default)
+
+  sender    User @relation("complimentSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User @relation("complimentRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([senderId, recipientId])
+  @@index([senderId, cooldownEndsAt])
+}
