@@ -47,7 +47,7 @@ This document shows how much ELO you earn for 10 reps/units of each exercise.
 
 | Exercise | 1 KM = ELO | Per KM |
 |----------|------------|--------|
-| Running | 45 | 45 |
+| Running | 120 | 120 |
 
 ## Notes:
 - All exercises use the same ELO calculation regardless of how you log them (normal insert, recent exercises, or daily challenge)
