@@ -15,6 +15,8 @@ This document shows how much ELO you earn for 10 reps/units of each exercise.
 | Pike Push-ups | 40 | 4 |
 | Push-ups | 30 | 3 |
 
+**Note:** The exercise name "Neutral-grip Pullups" (without hyphen) gives 3 ELO per rep after normalization.
+
 ## Lower Body (Reps)
 
 | Exercise | 10 Reps = ELO | Per Rep |
