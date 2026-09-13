@@ -11,6 +11,7 @@ import CharacterProfile from "../../../components/CharacterProfile";
 import ProfileBetButton from "../../../components/ProfileBetButton";
 import ComplimentButton from "../../../components/ComplimentButton";
 import CoinIcon from "../../../components/CoinIcon";
+import ResetAccountButton from "../../../components/ResetAccountButton";
 
 export default async function ProfilePage({ params }) {
   const viewerId = getUserIdFromCookies();
@@ -176,6 +177,7 @@ export default async function ProfilePage({ params }) {
               <div className="space-y-6 mb-6">
                 <PasswordResetModal userId={viewerId} />
                 <StatsPrivacySettings />
+                <ResetAccountButton />
               </div>
             )}
 

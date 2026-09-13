@@ -14,6 +14,11 @@ export default function SignupPage() {
     e.preventDefault();
     setError("");
 
+    if (username.length < 3 || username.length > 30) {
+      setError("Username must be 3-30 characters.");
+      return;
+    }
+
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
@@ -50,12 +55,21 @@ export default function SignupPage() {
     <main className="max-w-sm mx-auto mt-24 px-6">
       <h1 className="text-2xl font-semibold mb-6 text-center">Sign up</h1>
       <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-        <input
-          className="border border-gray-300 rounded-md px-3 py-2"
-          placeholder="Username (3+ chars)"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-        />
+        <div className="relative">
+          <input
+            className="border border-gray-300 rounded-md px-3 py-2 w-full"
+            placeholder="Username (3-30 chars)"
+            value={username}
+            onChange={(e) => {
+              if (e.target.value.length <= 30) {
+                setUsername(e.target.value);
+              }
+            }}
+          />
+          <span className="absolute right-3 top-2 text-xs text-gray-400">
+            {username.length}/30
+          </span>
+        </div>
         <input
           className="border border-gray-300 rounded-md px-3 py-2"
           placeholder="Password (6+ chars)"

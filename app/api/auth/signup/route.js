@@ -4,9 +4,9 @@ import { setSessionCookie } from "../../../../lib/auth.js";
 export async function POST(request) {
   const { username, password } = await request.json();
 
-  if (!username || !password || username.length < 3 || password.length < 6) {
+  if (!username || !password || username.length < 3 || username.length > 30 || password.length < 6) {
     return Response.json(
-      { error: "Username must be 3+ chars and password 6+ chars." },
+      { error: "Username must be 3-30 chars and password 6+ chars." },
       { status: 400 }
     );
   }
