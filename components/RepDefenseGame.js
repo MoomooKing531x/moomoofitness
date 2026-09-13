@@ -26,6 +26,8 @@ export default function RepDefenseGame() {
   const [congratsMessage, setCongratsMessage] = useState("");
   const [showCongrats, setShowCongrats] = useState(false);
   const [lastCoinsEarned, setLastCoinsEarned] = useState(0);
+  const [troopSortMode, setTroopSortMode] = useState("cheapest"); // "cheapest", "expensive", "recent"
+  const [troopUsageTimes, setTroopUsageTimes] = useState({}); // Track when each troop was last used
   const isCompletingLevelRef = useRef(false);
   
   const gameLoopRef = useRef(null);
@@ -151,17 +153,23 @@ export default function RepDefenseGame() {
   const purchaseTroop = async (troopTypeId, quantity = 1) => {
     const troopType = troopTypes.find((t) => t.id === troopTypeId);
     if (!troopType) return;
-    
+
+    // Track usage time for recent sorting
+    setTroopUsageTimes(prev => ({
+      ...prev,
+      [troopTypeId]: Date.now()
+    }));
+
     const difficultyMultiplier = {
       easy: 0.5,
       medium: 1.0,
       hard: 1.5,
     }[difficulty] || 1.0;
-    
+
     // Level-based cost scaling: costs increase exponentially with level
     // Level 1: no multiplier, Level 10: 1.5x, Level 100: 5x, Level 500: 25x
     const levelCostMultiplier = Math.pow(1.02, Math.max(0, currentLevel - 1));
-    
+
     const totalCost = Math.floor(troopType.cost * quantity * difficultyMultiplier * levelCostMultiplier);
     if (gamePoints < totalCost) {
       alert("Insufficient points!");
@@ -706,11 +714,34 @@ export default function RepDefenseGame() {
       {/* Troop Shop */}
       {(gameMode === "levelPlaying" || gameMode === "infinityPlaying") && (
         <div className="bg-white border rounded p-4 mb-4">
-          <h2 className="text-xl font-semibold mb-4">Troop Shop</h2>
-          
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">Troop Shop</h2>
+            <button
+              onClick={() => {
+                if (troopSortMode === "cheapest") setTroopSortMode("expensive");
+                else if (troopSortMode === "expensive") setTroopSortMode("recent");
+                else setTroopSortMode("cheapest");
+              }}
+              className="text-sm px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded border"
+            >
+              {troopSortMode === "cheapest" && "Cheapest →"}
+              {troopSortMode === "expensive" && "Expensive →"}
+              {troopSortMode === "recent" && "Recent →"}
+            </button>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {troopTypes
-              .sort((a, b) => b.cost - a.cost) // Sort by cost (most expensive first)
+              .sort((a, b) => {
+                if (troopSortMode === "cheapest") return a.cost - b.cost;
+                if (troopSortMode === "expensive") return b.cost - a.cost;
+                if (troopSortMode === "recent") {
+                  const timeA = troopUsageTimes[a.id] || 0;
+                  const timeB = troopUsageTimes[b.id] || 0;
+                  return timeB - timeA; // Most recent first
+                }
+                return 0;
+              })
               .map((troop) => {
               const difficultyMultiplier = {
                 easy: 0.5,
