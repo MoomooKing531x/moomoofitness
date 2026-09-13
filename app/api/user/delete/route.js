@@ -57,7 +57,7 @@ export async function POST(request) {
 
     // Delete all notifications for this user
     await prisma.notification.deleteMany({
-      where: { userId },
+      where: { recipientId: userId },
     });
 
     // Delete all game runs for this user

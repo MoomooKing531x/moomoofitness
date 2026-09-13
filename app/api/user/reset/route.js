@@ -56,7 +56,14 @@ export async function POST(request) {
 
     // Delete all notifications for this user
     await prisma.notification.deleteMany({
-      where: { userId },
+      where: { recipientId: userId },
+    });
+
+    // Delete all compliment cooldowns for this user
+    await prisma.complimentCooldown.deleteMany({
+      where: {
+        OR: [{ senderId: userId }, { recipientId: userId }],
+      },
     });
 
     // Delete all game runs for this user
