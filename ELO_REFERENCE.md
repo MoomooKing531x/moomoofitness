@@ -10,7 +10,7 @@ This document shows how much ELO you earn for 10 reps/units of each exercise.
 | Muscle-ups | 120 | 12 |
 | Pull-ups | 70 | 7 |
 | Dips | 70 | 7 |
-| Neutral-grip Pull-ups | 65 | 6.5 |
+| Neutral-grip Pull-ups | 40 | 4 |
 | Chin-ups | 60 | 6 |
 | Pike Push-ups | 40 | 4 |
 | Push-ups | 30 | 3 |
