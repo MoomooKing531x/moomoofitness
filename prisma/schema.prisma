@@ -57,6 +57,7 @@ model User {
   acceptedBets     Bet[] @relation("betAccepter")
   sentCompliments ComplimentCooldown[] @relation("complimentSender")
   receivedCompliments ComplimentCooldown[] @relation("complimentRecipient")
+  levelCompletions LevelCompletion[]
 }
 
 model Friendship {
@@ -254,4 +255,18 @@ model ComplimentCooldown {
 
   @@unique([senderId, recipientId])
   @@index([senderId, cooldownEndsAt])
+}
+
+model LevelCompletion {
+  id               String   @id @default(uuid())
+  userId           String
+  level            Int
+  completionCount  Int      @default(0)
+  lastCompletedAt  DateTime @default(now())
+  lastResetAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, level])
+  @@index([userId, level])
 }

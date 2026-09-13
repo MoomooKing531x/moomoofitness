@@ -32,28 +32,37 @@ const exercises = [
   { name: "Neutral-grip Pullups", category: "upper", unit: "reps" },
 ];
 
-// Troop types for each exercise (simplified to 10 with clear progression)
+// Troop types - 20 unique troops with Battle Cats style progression (quality > quantity)
 const troopTypes = [
-  // Tier 1: Basic weak troops (10GP)
-  { name: "Recruit", damage: 1, cost: 10, attackSpeed: 3.0, maxHits: 3, difficultyTier: "low", color: "#C9ADA7", shape: "circle" },
-  // Tier 2: Slightly better (25GP)
-  { name: "Soldier", damage: 2, cost: 25, attackSpeed: 2.8, maxHits: 4, difficultyTier: "low", color: "#9A8C98", shape: "circle" },
-  // Tier 3: Medium strength (50GP)
-  { name: "Warrior", damage: 3, cost: 50, attackSpeed: 2.5, maxHits: 5, difficultyTier: "medium", color: "#8B7E74", shape: "square" },
-  // Tier 4: Better warrior (100GP)
-  { name: "Knight", damage: 4, cost: 100, attackSpeed: 2.3, maxHits: 6, difficultyTier: "medium", color: "#6D6875", shape: "square" },
-  // Tier 5: Elite soldier (200GP)
-  { name: "Elite", damage: 5, cost: 200, attackSpeed: 2.0, maxHits: 7, difficultyTier: "medium", color: "#B5838D", shape: "triangle" },
-  // Tier 6: Strong elite (350GP)
-  { name: "Champion", damage: 6, cost: 350, attackSpeed: 1.8, maxHits: 8, difficultyTier: "high", color: "#E5989B", shape: "triangle" },
-  // Tier 7: Advanced (500GP)
-  { name: "Hero", damage: 8, cost: 500, attackSpeed: 1.6, maxHits: 10, difficultyTier: "high", color: "#FFB6B9", shape: "star" },
-  // Tier 8: Master (650GP)
-  { name: "Master", damage: 10, cost: 650, attackSpeed: 1.4, maxHits: 12, difficultyTier: "high", color: "#FF5252", shape: "star" },
-  // Tier 9: Elite master (800GP)
-  { name: "Legend", damage: 12, cost: 800, attackSpeed: 1.2, maxHits: 15, difficultyTier: "high", color: "#FF6B6B", shape: "star" },
-  // Tier 10: Ultimate (1000GP)
-  { name: "Titan", damage: 15, cost: 1000, attackSpeed: 1.0, maxHits: 20, difficultyTier: "high", color: "#FF8E72", shape: "star" },
+  // Tier 1: Trash tier - 1-5 GP, extremely weak
+  { name: "Scrap", damage: 1, cost: 1, attackSpeed: 4.0, maxHits: 1, difficultyTier: "low", color: "#808080", shape: "circle" },
+  { name: "Peasant", damage: 1, cost: 2, attackSpeed: 3.8, maxHits: 1, difficultyTier: "low", color: "#A9A9A9", shape: "circle" },
+  { name: "Rat", damage: 2, cost: 3, attackSpeed: 3.5, maxHits: 1, difficultyTier: "low", color: "#B87333", shape: "circle" },
+  { name: "Goblin", damage: 2, cost: 5, attackSpeed: 3.2, maxHits: 2, difficultyTier: "low", color: "#556B2F", shape: "square" },
+  
+  // Tier 2: Basic tier - 10-25 GP, weak but usable
+  { name: "Recruit", damage: 3, cost: 10, attackSpeed: 3.0, maxHits: 2, difficultyTier: "low", color: "#C9ADA7", shape: "square" },
+  { name: "Slime", damage: 3, cost: 15, attackSpeed: 2.8, maxHits: 3, difficultyTier: "low", color: "#7FFFD4", shape: "circle" },
+  { name: "Bat", damage: 4, cost: 20, attackSpeed: 2.5, maxHits: 2, difficultyTier: "low", color: "#4B0082", shape: "triangle" },
+  { name: "Wolf", damage: 5, cost: 25, attackSpeed: 2.3, maxHits: 3, difficultyTier: "low", color: "#8B4513", shape: "triangle" },
+  
+  // Tier 3: Medium tier - 50-150 GP, balanced
+  { name: "Soldier", damage: 6, cost: 50, attackSpeed: 2.0, maxHits: 4, difficultyTier: "medium", color: "#9A8C98", shape: "square" },
+  { name: "Archer", damage: 8, cost: 75, attackSpeed: 1.8, maxHits: 3, difficultyTier: "medium", color: "#6B8E23", shape: "triangle" },
+  { name: "Warrior", damage: 10, cost: 100, attackSpeed: 1.6, maxHits: 5, difficultyTier: "medium", color: "#8B7E74", shape: "square" },
+  { name: "Knight", damage: 12, cost: 150, attackSpeed: 1.5, maxHits: 6, difficultyTier: "medium", color: "#6D6875", shape: "star" },
+  
+  // Tier 4: Elite tier - 200-500 GP, strong
+  { name: "Mage", damage: 15, cost: 200, attackSpeed: 1.3, maxHits: 4, difficultyTier: "high", color: "#4169E1", shape: "star" },
+  { name: "Elite", damage: 18, cost: 250, attackSpeed: 1.2, maxHits: 5, difficultyTier: "high", color: "#B5838D", shape: "star" },
+  { name: "Samurai", damage: 22, cost: 350, attackSpeed: 1.1, maxHits: 6, difficultyTier: "high", color: "#DC143C", shape: "star" },
+  { name: "Champion", damage: 25, cost: 500, attackSpeed: 1.0, maxHits: 7, difficultyTier: "high", color: "#E5989B", shape: "star" },
+  
+  // Tier 5: Legendary tier - 750-2000 GP, very strong
+  { name: "Hero", damage: 35, cost: 750, attackSpeed: 0.9, maxHits: 8, difficultyTier: "high", color: "#FFB6B9", shape: "star" },
+  { name: "Dragon", damage: 50, cost: 1000, attackSpeed: 0.8, maxHits: 10, difficultyTier: "high", color: "#FF4500", shape: "star" },
+  { name: "Legend", damage: 75, cost: 1500, attackSpeed: 0.7, maxHits: 12, difficultyTier: "high", color: "#FF6B6B", shape: "star" },
+  { name: "Titan", damage: 100, cost: 2000, attackSpeed: 0.5, maxHits: 15, difficultyTier: "high", color: "#FF8E72", shape: "star" },
 ];
 
 async function main() {

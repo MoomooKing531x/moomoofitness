@@ -1,88 +1,75 @@
 import { prisma } from "../../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
-// GET /api/stats/logs?exerciseId=&period=daily|weekly|monthly|yearly|all
 export async function GET(request) {
   const userId = getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const exerciseId = searchParams.get("exerciseId");
-  const period = searchParams.get("period") || "all"; // daily, weekly, monthly, yearly, all
+  const targetUserId = searchParams.get("userId");
 
-  if (!exerciseId) {
-    return Response.json({ error: "exerciseId required" }, { status: 400 });
+  if (!targetUserId) {
+    return Response.json({ error: "User ID required" }, { status: 400 });
   }
 
-  // Fetch logs for the user and exercise
-  const logs = await prisma.log.findMany({
-    where: {
-      userId,
-      exerciseId,
-    },
-    select: {
-      loggedAt: true,
-      date: true,
-      amount: true,
-      reps: true,
-      sets: true,
-    },
-    orderBy: { loggedAt: "asc" },
+  // Verify the requesting user can view the target user's stats
+  const viewer = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
   });
 
-  if (!logs.length) {
-    return Response.json({ data: [] });
+  const targetUser = await prisma.user.findUnique({
+    where: { id: targetUserId },
+    select: { id: true, statsVisibility: true },
+  });
+
+  if (!viewer || !targetUser) {
+    return Response.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Group logs by time period
-  const grouped = groupByPeriod(logs, period);
+  const isYou = targetUser.id === viewer.id;
+  let canViewStats = isYou;
 
-  return Response.json({ data: grouped, period });
-}
-
-function groupByPeriod(logs, period) {
-  const grouped = {};
-
-  logs.forEach((log) => {
-    const date = new Date(log.loggedAt);
-    let key;
-
-    switch (period) {
-      case "daily":
-        key = date.toISOString().split("T")[0]; // YYYY-MM-DD
-        break;
-      case "weekly":
-        // ISO week number
-        const weekStart = getWeekStart(date);
-        key = weekStart.toISOString().split("T")[0];
-        break;
-      case "monthly":
-        key = date.toISOString().slice(0, 7); // YYYY-MM
-        break;
-      case "yearly":
-        key = date.getFullYear().toString();
-        break;
-      case "all":
-      default:
-        key = date.toISOString().split("T")[0];
-        break;
+  if (!isYou) {
+    if (targetUser.statsVisibility === "public") {
+      canViewStats = true;
+    } else if (targetUser.statsVisibility === "friends") {
+      const friendship = await prisma.friendship.findFirst({
+        where: {
+          status: "accepted",
+          OR: [
+            { requesterId: viewer.id, addresseeId: targetUser.id },
+            { requesterId: targetUser.id, addresseeId: viewer.id },
+          ],
+        },
+      });
+      canViewStats = !!friendship;
     }
+  }
 
-    if (!grouped[key]) {
-      grouped[key] = { date: key, totalAmount: 0, maxAmount: 0, logCount: 0 };
-    }
-    grouped[key].totalAmount += log.amount;
-    grouped[key].maxAmount = Math.max(grouped[key].maxAmount, log.amount);
-    grouped[key].logCount += 1;
+  if (!canViewStats) {
+    return Response.json({ stats: [] });
+  }
+
+  const totalsByExercise = await prisma.log.groupBy({
+    by: ["exerciseId"],
+    where: { userId: targetUserId },
+    _sum: { amount: true },
   });
 
-  // Convert to array and sort by date
-  return Object.values(grouped).sort((a, b) => a.date.localeCompare(b.date));
-}
+  const exercises = await prisma.exercise.findMany({
+    where: { id: { in: totalsByExercise.map((t) => t.exerciseId) } },
+  });
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is Sunday
-  return new Date(d.setDate(diff));
+  const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
+
+  const stats = totalsByExercise
+    .map((t) => ({
+      exercise: exerciseById[t.exerciseId],
+      total: t._sum.amount || 0,
+    }))
+    .filter((s) => s.exercise)
+    .sort((a, b) => a.exercise.name.localeCompare(b.exercise.name));
+
+  return Response.json({ stats });
 }

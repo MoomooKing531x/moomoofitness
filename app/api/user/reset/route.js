@@ -71,6 +71,46 @@ export async function POST(request) {
       where: { userId },
     });
 
+    // Delete all level completions for this user (for diminishing rewards)
+    await prisma.levelCompletion.deleteMany({
+      where: { userId },
+    });
+
+    // Delete all challenge completions for this user
+    await prisma.challengeCompletion.deleteMany({
+      where: { userId },
+    });
+
+    // Delete all daily challenges for this user
+    await prisma.dailyChallenge.deleteMany({
+      where: { userId },
+    });
+
+    // Delete all friend notification preferences for this user
+    await prisma.friendNotificationPreference.deleteMany({
+      where: { userId },
+    });
+
+    // Delete all gifts sent by this user
+    await prisma.gift.deleteMany({
+      where: { senderId: userId },
+    });
+
+    // Delete all gifts received by this user
+    await prisma.gift.deleteMany({
+      where: { recipientId: userId },
+    });
+
+    // Delete all reviews by this user
+    await prisma.review.deleteMany({
+      where: { authorId: userId },
+    });
+
+    // Delete all custom exercises created by this user
+    await prisma.exercise.deleteMany({
+      where: { createdByUserId: userId },
+    });
+
     // Reset user stats
     await prisma.user.update({
       where: { id: userId },
@@ -86,6 +126,10 @@ export async function POST(request) {
         equippedHat: null,
         equippedJacket: null,
         equippedAccessory: null,
+        maxGameLevelReached: 1,
+        totalDailyChallengesDone: 0,
+        dailyChallengeStreak: 0,
+        statsVisibility: "public",
       },
     });
 

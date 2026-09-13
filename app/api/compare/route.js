@@ -1,12 +1,13 @@
 import { prisma } from "../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../lib/auth.js";
 
-// GET /api/compare?targetUserId=xxx&period=today|week|month|year|alltime
+// GET /api/compare?targetUserId=xxx&period=today|week|month|year|alltime&gender=all|male|female
 // Returns comparison data between current user and target user
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const targetUserId = searchParams.get("targetUserId");
   const period = searchParams.get("period") || "alltime";
+  const gender = searchParams.get("gender") || "all";
 
   const currentUserId = getUserIdFromCookies();
 
@@ -20,6 +21,12 @@ export async function GET(request) {
 
   if (targetUserId === currentUserId) {
     return Response.json({ error: "Cannot compare with yourself" }, { status: 400 });
+  }
+
+  // Build gender filter
+  let genderFilter = {};
+  if (gender !== "all") {
+    genderFilter = { gender: gender === "male" ? "male" : "female" };
   }
 
   // Get date filter based on period
@@ -53,12 +60,17 @@ export async function GET(request) {
     }),
     prisma.user.findUnique({
       where: { id: targetUserId },
-      select: { id: true, username: true, displayName: true }
+      select: { id: true, username: true, displayName: true, gender: true }
     })
   ]);
 
   if (!targetUser) {
     return Response.json({ error: "Target user not found" }, { status: 404 });
+  }
+
+  // Check if target user matches gender filter
+  if (gender !== "all" && targetUser.gender !== gender) {
+    return Response.json({ error: "Target user does not match gender filter" }, { status: 400 });
   }
 
   // Get all exercises

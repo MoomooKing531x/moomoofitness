@@ -8,6 +8,7 @@ export default function LeaderboardPage() {
   const [streakType, setStreakType] = useState("daily"); // daily or workout
   const [totalType, setTotalType] = useState("challenges"); // challenges or workouts
   const [scope, setScope] = useState("everyone");
+  const [gender, setGender] = useState("all"); // all, male, female
   const [selectedExercise, setSelectedExercise] = useState(null);
   const [exercises, setExercises] = useState([]);
   const [leaderboardData, setLeaderboardData] = useState({});
@@ -29,7 +30,7 @@ export default function LeaderboardPage() {
     } else if (boardType === "totals") {
       fetchTotalLeaderboard();
     }
-  }, [boardType, scope, exercises, streakType, totalType]);
+  }, [boardType, scope, gender, exercises, streakType, totalType]);
 
   async function fetchExercises() {
     try {
@@ -65,7 +66,7 @@ export default function LeaderboardPage() {
       const boardData = {};
       for (const exercise of exercises) {
         const boardRes = await fetch(
-          `/api/leaderboard/${exercise.id}?scope=${scope}`
+          `/api/leaderboard/${exercise.id}?scope=${scope}&gender=${gender}`
         );
         if (boardRes.ok) {
           const board = await boardRes.json();
@@ -83,7 +84,7 @@ export default function LeaderboardPage() {
   async function fetchStreakLeaderboard() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard/streaks?type=${streakType}&scope=${scope}`);
+      const res = await fetch(`/api/leaderboard/streaks?type=${streakType}&scope=${scope}&gender=${gender}`);
       if (res.ok) {
         const data = await res.json();
         setStreakLeaderboard(data.leaderboard || []);
@@ -98,7 +99,7 @@ export default function LeaderboardPage() {
   async function fetchTotalLeaderboard() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/leaderboard/totals?type=${totalType}&scope=${scope}`);
+      const res = await fetch(`/api/leaderboard/totals?type=${totalType}&scope=${scope}&gender=${gender}`);
       if (res.ok) {
         const data = await res.json();
         setTotalLeaderboard(data.leaderboard || []);
@@ -213,6 +214,42 @@ export default function LeaderboardPage() {
                   </button>
                 </div>
               </div>
+
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Gender</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setGender("all")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "all"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setGender("male")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "male"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Male
+                  </button>
+                  <button
+                    onClick={() => setGender("female")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "female"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Female
+                  </button>
+                </div>
+              </div>
               
               <div>
                 <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Exercises</h3>
@@ -319,6 +356,42 @@ export default function LeaderboardPage() {
                     }`}
                   >
                     Friends
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Gender</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setGender("all")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "all"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setGender("male")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "male"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Male
+                  </button>
+                  <button
+                    onClick={() => setGender("female")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "female"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Female
                   </button>
                 </div>
               </div>
@@ -439,6 +512,42 @@ export default function LeaderboardPage() {
                     }`}
                   >
                     Friends
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3">Gender</h3>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setGender("all")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "all"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    All
+                  </button>
+                  <button
+                    onClick={() => setGender("male")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "male"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Male
+                  </button>
+                  <button
+                    onClick={() => setGender("female")}
+                    className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                      gender === "female"
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    }`}
+                  >
+                    Female
                   </button>
                 </div>
               </div>

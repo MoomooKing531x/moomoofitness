@@ -13,14 +13,22 @@ export async function GET() {
       displayName: true,
       currentStreak: true,
       longestStreak: true,
+      lastLoggedDate: true,
       ownedItems: true,
       equippedHat: true,
       equippedJacket: true,
       equippedAccessory: true,
+      elo: true,
+      gp: true,
       coins: true,
+      maxGameLevelReached: true,
     },
   });
 
-  return Response.json({ user });
+  if (!user) {
+    return Response.json({ ok: false, user: null });
+  }
+
+  return Response.json({ ok: true, user });
 }
 

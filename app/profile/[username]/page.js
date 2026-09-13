@@ -1,8 +1,7 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { prisma } from "../../../lib/db";
-import { getUserIdFromCookies } from "../../../lib/auth";
-import { getStreakDisplay } from "../../../lib/streak";
 import Navbar from "../../../components/Navbar";
 import PasswordResetModal from "../../../components/PasswordResetModal";
 import FriendNotificationToggle from "../../../components/FriendNotificationToggle";
@@ -13,79 +12,88 @@ import ComplimentButton from "../../../components/ComplimentButton";
 import CoinIcon from "../../../components/CoinIcon";
 import ResetAccountButton from "../../../components/ResetAccountButton";
 import DeleteAccountButton from "../../../components/DeleteAccountButton";
+import EditAccountModal from "../../../components/EditAccountModal";
 
-export default async function ProfilePage({ params }) {
-  const viewerId = getUserIdFromCookies();
-  if (!viewerId) redirect("/login");
+export default function ProfilePage({ params }) {
+  const [profileUser, setProfileUser] = useState(null);
+  const [viewer, setViewer] = useState(null);
+  const [stats, setStats] = useState([]);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  const viewer = await prisma.user.findUnique({ where: { id: viewerId } });
-  if (!viewer) redirect("/login");
+  useEffect(() => {
+    async function fetchData() {
+      try {
+        const [profileRes, meRes] = await Promise.all([
+          fetch(`/api/user/profile?username=${params.username}`),
+          fetch("/api/auth/me"),
+        ]);
 
-  const profileUser = await prisma.user.findUnique({
-    where: { username: params.username },
-  });
-  if (!profileUser) redirect("/dashboard");
+        const profileData = await profileRes.json();
+        const meData = await meRes.json();
 
-  const isYou = profileUser.id === viewerId;
+        if (!profileData.ok || !meData.ok) {
+          window.location.href = "/dashboard";
+          return;
+        }
 
-  // Check stats privacy
-  let canViewStats = isYou; // Can always view your own stats
-  if (!isYou) {
-    if (profileUser.statsVisibility === "public") {
-      canViewStats = true;
-    } else if (profileUser.statsVisibility === "friends") {
-      // Check if they're friends
-      const friendship = await prisma.friendship.findFirst({
-        where: {
-          status: "accepted",
-          OR: [
-            { requesterId: viewerId, addresseeId: profileUser.id },
-            { requesterId: profileUser.id, addresseeId: viewerId },
-          ],
-        },
-      });
-      canViewStats = !!friendship;
-    } else {
-      canViewStats = false; // "nobody"
+        setProfileUser(profileData.user);
+        setViewer(meData.user);
+
+        // Fetch stats if can view
+        if (profileData.canViewStats) {
+          const statsRes = await fetch(`/api/stats/logs?userId=${profileData.user.id}`);
+          const statsData = await statsRes.json();
+          setStats(statsData.stats || []);
+        }
+      } catch (error) {
+        console.error("Error fetching profile:", error);
+      } finally {
+        setLoading(false);
+      }
     }
+
+    fetchData();
+  }, [params.username]);
+
+  const handleSaveAccount = async (data) => {
+    const res = await fetch("/api/user/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (res.ok) {
+      setIsEditModalOpen(false);
+      window.location.reload();
+    }
+  };
+
+  const handleDownloadLogs = () => {
+    window.location.href = "/api/logs/download";
+  };
+
+  if (loading) {
+    return <div className="flex justify-center items-center h-screen">Loading...</div>;
   }
 
-  // Only fetch stats if user can view them
-  let stats = [];
-  if (canViewStats) {
-    const totalsByExercise = await prisma.log.groupBy({
-      by: ["exerciseId"],
-      where: { userId: profileUser.id },
-      _sum: { amount: true },
-    });
-
-    const exercises = await prisma.exercise.findMany({
-      where: { id: { in: totalsByExercise.map((t) => t.exerciseId) } },
-    });
-    const exerciseById = Object.fromEntries(exercises.map((e) => [e.id, e]));
-
-    stats = totalsByExercise
-      .map((t) => ({
-        exercise: exerciseById[t.exerciseId],
-        total: t._sum.amount || 0,
-      }))
-      .filter((s) => s.exercise)
-      .sort((a, b) => a.exercise.name.localeCompare(b.exercise.name));
+  if (!profileUser || !viewer) {
+    return <div className="flex justify-center items-center h-screen">User not found</div>;
   }
 
-  const { streak, status } = getStreakDisplay(profileUser);
-
-  const viewerStreak = getStreakDisplay(viewer);
+  const isYou = profileUser.id === viewer.id;
+  const streak = profileUser.currentStreak || 0;
+  const status = profileUser.lastLoggedDate ? "active" : "none";
 
   return (
     <div>
       <Navbar
         username={viewer.username}
         displayName={viewer.displayName}
-        currentStreak={viewerStreak.streak}
-        streakStatus={viewerStreak.status}
+        currentStreak={viewer.currentStreak || 0}
+        streakStatus={viewer.lastLoggedDate ? "active" : "none"}
         elo={viewer.elo || 0}
         coins={viewer.coins || 0}
+        maxGameLevelReached={viewer.maxGameLevelReached || 1}
       />
       <main className="max-w-4xl mx-auto px-6 py-10">
         <Link href="/dashboard" className="text-sm text-gray-500 underline">
@@ -112,6 +120,11 @@ export default async function ProfilePage({ params }) {
                 "{profileUser.displayName}"
               </p>
             )}
+            {profileUser.age && (
+              <p className="text-sm text-gray-500 mb-2">
+                Age: <strong>{profileUser.age}</strong>
+              </p>
+            )}
             {profileUser.gender && (
               <p className="text-sm text-gray-500 mb-2">
                 Gender: <strong className="capitalize">{profileUser.gender === "prefer-not-to-say" ? "Prefer not to say" : profileUser.gender}</strong>
@@ -119,113 +132,88 @@ export default async function ProfilePage({ params }) {
             )}
             <p className="text-sm text-gray-500 mb-6">
               {status === "active" && `${streak} day streak (active)`}
-              {status === "grace" && `${streak} day streak — hasn't logged today yet`}
-              {(status === "broken" || status === "none") && "No active streak"}
-              {" · "}Longest streak: {profileUser.longestStreak} day
-              {profileUser.longestStreak === 1 ? "" : "s"}
+              {status === "none" && "No active streak"}
             </p>
 
-            <div className="mb-6 p-4 bg-gray-50 rounded-md">
-              <h2 className="text-sm font-semibold text-gray-700 mb-3">Currencies</h2>
-              {!canViewStats && !isYou ? (
-                <div className="text-sm text-gray-600 p-3 bg-gray-100 rounded border border-gray-300">
-                  User has privated their stats
+            {/* Stats */}
+            <div className="bg-white border rounded-lg p-4 mb-4">
+              <h2 className="text-lg font-semibold mb-3">Exercise Stats</h2>
+              {stats.length > 0 ? (
+                <div className="space-y-2">
+                  {stats.map((stat) => (
+                    <div key={stat.exercise.id} className="flex justify-between text-sm">
+                      <span>{stat.exercise.name}</span>
+                      <span className="font-semibold">{stat.total}</span>
+                    </div>
+                  ))}
                 </div>
               ) : (
-                <div className="grid grid-cols-3 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600"><strong>ELO</strong></span>
-                    <div className="font-semibold text-lg">{(profileUser.elo || 0).toLocaleString()}</div>
-                    <p className="text-xs text-gray-500 mt-1">Exercise Points</p>
-                  </div>
-                  <div>
-                    <span className="text-gray-600"><strong>GP</strong></span>
-                    <div className="font-semibold text-lg">{(profileUser.elo || 0).toLocaleString()}</div>
-                    <p className="text-xs text-gray-500 mt-1">Game Points</p>
-                  </div>
-                  <div>
-                    <CoinIcon size={20} className="text-yellow-600" />
-                    <div className="font-semibold text-lg text-yellow-600">{(profileUser.coins || 0).toLocaleString()}</div>
-                    <p className="text-xs text-gray-500 mt-1">Coins</p>
-                  </div>
-                </div>
+                <p className="text-sm text-gray-500">No exercises logged yet.</p>
               )}
             </div>
 
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <h2 className="text-sm font-semibold text-blue-900 mb-3">Challenge & Workout Stats</h2>
-              {!canViewStats && !isYou ? (
-                <div className="text-sm text-blue-700 p-3 bg-blue-100 rounded border border-blue-300">
-                  User has privated their stats
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-blue-700"><strong>Daily Challenge Streak</strong></span>
-                    <div className="font-semibold text-lg text-blue-600">{(profileUser.dailyChallengeStreak || 0)}</div>
-                    <p className="text-xs text-blue-600 mt-1">{(profileUser.totalDailyChallengesDone || 0)} total completed</p>
-                  </div>
-                  <div>
-                    <span className="text-blue-700"><strong>Workout Streak</strong></span>
-                    <div className="font-semibold text-lg text-blue-600">{(profileUser.currentStreak || 0)}</div>
-                    <p className="text-xs text-blue-600 mt-1">{(profileUser.totalWorkoutDaysDone || 0)} total days</p>
-                  </div>
-                </div>
-              )}
+            {/* Currency Stats */}
+            <div className="grid grid-cols-4 gap-4 text-sm mb-4">
+              <div>
+                <span className="text-gray-600"><strong>ELO</strong></span>
+                <div className="font-semibold text-lg">{Math.round(profileUser.elo || 0).toLocaleString()}</div>
+                <p className="text-xs text-gray-500 mt-1">Exercise Points</p>
+              </div>
+              <div>
+                <span className="text-gray-600"><strong>GP</strong></span>
+                <div className="font-semibold text-lg">{Math.round(profileUser.gp || 0).toLocaleString()}</div>
+                <p className="text-xs text-gray-500 mt-1">Game Points</p>
+              </div>
+              <div>
+                <CoinIcon size={20} className="text-yellow-600 mb-2" />
+                <div className="font-semibold text-lg text-yellow-600">{Math.round(profileUser.coins || 0).toLocaleString()}</div>
+                <p className="text-xs text-gray-500 mt-1">Coins</p>
+              </div>
+              <div>
+                <span className="text-gray-600"><strong>Rep Defense</strong></span>
+                <div className="font-semibold text-lg">{profileUser.maxGameLevelReached || 1}</div>
+                <p className="text-xs text-gray-500 mt-1">Max Level</p>
+              </div>
             </div>
 
+            {/* Actions */}
             {isYou && (
-              <div className="space-y-6 mb-6">
-                <PasswordResetModal userId={viewerId} />
+              <div className="space-y-3">
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+                >
+                  Edit Account
+                </button>
+                <button
+                  onClick={handleDownloadLogs}
+                  className="w-full bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
+                >
+                  Download All Logs
+                </button>
+                <ProfileBetButton friendId={profileUser.id} friendName={profileUser.displayName || profileUser.username} userCoins={viewer.coins || 0} />
+                <ComplimentButton friendId={profileUser.id} friendName={profileUser.displayName || profileUser.username} userCoins={viewer.coins || 0} />
+                <PasswordResetModal />
+                <FriendNotificationToggle />
                 <StatsPrivacySettings />
                 <ResetAccountButton />
                 <DeleteAccountButton />
               </div>
             )}
-
-            {!isYou && (
-              <div className="space-y-3 mb-6">
-                <FriendNotificationToggle friendId={profileUser.id} friendUsername={profileUser.username} />
-                <ProfileBetButton friendId={profileUser.id} friendName={profileUser.displayName || profileUser.username} userCoins={viewer.coins || 0} />
-                <ComplimentButton friendId={profileUser.id} friendName={profileUser.displayName || profileUser.username} userCoins={viewer.coins || 0} />
-              </div>
-            )}
           </div>
         </div>
-
-        <div className="mt-12">
-          <h2 className="text-sm font-semibold text-gray-500 mb-3">All-time totals</h2>
-          {!canViewStats && !isYou ? (
-            <div className="text-sm text-gray-600 p-4 bg-gray-100 rounded border border-gray-300">
-              User has privated their stats
-            </div>
-          ) : (
-            <div className="border border-gray-200 rounded-md divide-y">
-            {stats.length === 0 && (
-              <p className="p-4 text-sm text-gray-500">No exercises logged yet.</p>
-            )}
-            {stats.map((s) => (
-              <div key={s.exercise.id} className="flex justify-between items-center px-4 py-3 text-sm hover:bg-gray-50">
-                <Link href={`/leaderboard/${s.exercise.id}`} className="hover:underline flex-1">
-                  {s.exercise.name}
-                </Link>
-                <span className="mr-4">
-                  {s.total} {s.exercise.unit}
-                </span>
-                {isYou && (
-                  <Link 
-                    href={`/stats/${s.exercise.id}`}
-                    className="text-xs text-blue-600 hover:underline whitespace-nowrap"
-                  >
-                    Graph
-                  </Link>
-                )}
-              </div>
-            ))}
-            </div>
-          )}
-        </div>
       </main>
+
+      <EditAccountModal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleSaveAccount}
+        currentData={{
+          displayName: profileUser.displayName,
+          age: profileUser.age,
+          gender: profileUser.gender,
+        }}
+      />
     </div>
   );
 }

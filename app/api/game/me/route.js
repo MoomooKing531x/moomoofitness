@@ -15,11 +15,15 @@ export async function GET() {
     },
   });
 
-  return Response.json({
+  const response = {
     elo: user?.elo || 0,                  // Exercise points
     gp: user?.gp || 0,                    // Game points (for game purchases)
     coins: user?.coins || 0,              // Coins earned from wins
     maxLevelUnlocked: user?.maxGameLevelReached || 1,  // Highest level completed
-  });
+  };
+  
+  console.log("GET /api/game/me response:", response);
+  
+  return Response.json(response);
 }
 

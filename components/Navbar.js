@@ -19,12 +19,17 @@ const STATUS_DISPLAY = {
   none: () => ({ icon: "💤", label: "0", title: "" }),
 };
 
-export default function Navbar({ username, displayName, currentStreak, streakStatus = "active", elo = 0, coins = 0 }) {
+export default function Navbar({ username, displayName, currentStreak, streakStatus = "active", elo = 0, coins = 0, maxGameLevelReached = 1 }) {
   const router = useRouter();
   const display = (STATUS_DISPLAY[streakStatus] || STATUS_DISPLAY.active)(currentStreak);
   const [liveElo, setLiveElo] = useState(elo);
   const [liveGP, setLiveGP] = useState(elo); // GP starts equal to ELO
   const [liveCoins, setLiveCoins] = useState(coins);
+
+  // Round values for display (actual values remain as decimals in database)
+  const displayElo = Math.round(liveElo);
+  const displayGP = Math.round(liveGP);
+  const displayCoins = Math.round(liveCoins);
 
   // Poll for real-time updates every 1 second
   useEffect(() => {
@@ -45,25 +50,19 @@ export default function Navbar({ username, displayName, currentStreak, streakSta
 
     fetchStats();
 
+    // Listen for coin updates from game wins or purchases
+    const handleCoinsUpdated = (event) => {
+      setLiveCoins(event.detail.coins);
+    };
+
+    window.addEventListener('coinsUpdated', handleCoinsUpdated);
+
     // Then poll every second
     const interval = setInterval(fetchStats, 1000);
 
-    // Listen for custom coin update events from shop
-    const handleCoinUpdate = (e) => {
-      setLiveCoins(e.detail.coins);
-    };
-    window.addEventListener('coinsUpdated', handleCoinUpdate);
-
-    // Listen for GP update events from game
-    const handleGPUpdate = (e) => {
-      setLiveGP(e.detail.gp);
-    };
-    window.addEventListener('gpUpdated', handleGPUpdate);
-
     return () => {
       clearInterval(interval);
-      window.removeEventListener('coinsUpdated', handleCoinUpdate);
-      window.removeEventListener('gpUpdated', handleGPUpdate);
+      window.removeEventListener('coinsUpdated', handleCoinsUpdated);
     };
   }, []);
 
@@ -110,15 +109,19 @@ export default function Navbar({ username, displayName, currentStreak, streakSta
         <div className="flex items-center gap-4 text-sm">
           <div className="flex items-center gap-1">
             <span title="Exercise Points"><strong>ELO</strong></span>
-            <span className="text-lg font-semibold">{liveElo.toLocaleString()}</span>
+            <span className="text-lg font-semibold">{displayElo.toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <span title="Game Points (spend to play)"><strong>GP</strong></span>
-            <span className="text-lg font-semibold">{liveGP.toLocaleString()}</span>
+            <span className="text-lg font-semibold">{displayGP.toLocaleString()}</span>
           </div>
           <div className="flex items-center gap-1">
             <CoinIcon size={18} className="text-yellow-600" />
-            <span className="text-lg font-semibold text-yellow-600">{liveCoins.toLocaleString()}</span>
+            <span className="text-lg font-semibold text-yellow-600">{displayCoins.toLocaleString()}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span title="Rep Defense Level"><strong>LVL</strong></span>
+            <span className="text-lg font-semibold">{maxGameLevelReached}</span>
           </div>
         </div>
         <span className="text-sm text-gray-600" title={display.title}>

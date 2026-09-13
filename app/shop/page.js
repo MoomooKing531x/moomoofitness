@@ -104,7 +104,7 @@ export default function ShopPage() {
   async function handlePurchase(itemId, cost, itemName) {
     if (!userStats) return;
     if (userStats.coins < cost) {
-      setShopMessage({ type: "error", text: `Not enough coins! Need ${cost}, you have ${userStats.coins}` });
+      setShopMessage({ type: "error", text: `Not enough coins! Need ${cost.toLocaleString()}, you have ${Math.round(userStats.coins).toLocaleString()}` });
       return;
     }
 
@@ -276,7 +276,7 @@ export default function ShopPage() {
               <CoinIcon size={24} className="text-yellow-600" />
               <div>
                 <p className="text-xs text-gray-600">Your Coins</p>
-                <p className="text-2xl font-bold text-yellow-600">{userStats?.coins || 0}</p>
+                <p className="text-2xl font-bold text-yellow-600">{Math.round(userStats?.coins || 0).toLocaleString()}</p>
               </div>
             </div>
           </div>

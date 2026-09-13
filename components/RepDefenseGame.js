@@ -16,13 +16,20 @@ export default function RepDefenseGame() {
   const [eloPoints, setEloPoints] = useState(0);  // Exercise points
   const [gamePoints, setGamePoints] = useState(0); // GP (game points for purchasing)
   const [coins, setCoins] = useState(0);           // Coins earned
+
+  // Round values for display (actual values remain as decimals in database)
+  const displayEloPoints = Math.round(eloPoints);
+  const displayGamePoints = Math.round(gamePoints);
+  const displayCoins = Math.round(coins);
   const [troopTypes, setTroopTypes] = useState([]);
   const [userTroops, setUserTroops] = useState([]);
   const [enemies, setEnemies] = useState([]);
-  const [baseHealth, setBaseHealth] = useState(100);
+  const [playerTowerHealth, setPlayerTowerHealth] = useState(100);
+  const [enemyTowerHealth, setEnemyTowerHealth] = useState(50);
   const [selectedTroop, setSelectedTroop] = useState(null);
   const [troopMaxHits, setTroopMaxHits] = useState({}); // Store max hits for each troop type
-  const [isInfinityMode, setIsInfinityMode] = useState(false);
+  const [isBossLevel, setIsBossLevel] = useState(false);
+  const [bossData, setBossData] = useState(null);
   const [congratsMessage, setCongratsMessage] = useState("");
   const [showCongrats, setShowCongrats] = useState(false);
   const [lastCoinsEarned, setLastCoinsEarned] = useState(0);
@@ -35,17 +42,21 @@ export default function RepDefenseGame() {
 
   // Fetch user game data
   useEffect(() => {
-    fetch("/api/game/me")
-      .then((res) => res.json())
-      .then((data) => {
-        setEloPoints(data.elo || 0);      // Exercise points
-        setGamePoints(data.gp || 0);      // Game points (for purchasing)
-        setCoins(data.coins || 0);        // Coins
-        // Set max level unlocked from user data (or default to 1)
-        setMaxLevelUnlocked(data.maxLevelUnlocked || 1);
-      })
-      .catch(console.error);
-  }, []);
+    if (gameMode === "levelSelect") {
+      fetch("/api/game/me")
+        .then((res) => res.json())
+        .then((data) => {
+          console.log("Fetched game data:", data);
+          setEloPoints(data.elo || 0);      // Exercise points
+          setGamePoints(data.gp || 0);      // Game points (for purchasing)
+          setCoins(data.coins || 0);        // Coins
+          // Set max level unlocked from user data (or default to 1)
+          setMaxLevelUnlocked(data.maxLevelUnlocked || 1);
+          console.log("Set maxLevelUnlocked to:", data.maxLevelUnlocked || 1);
+        })
+        .catch(console.error);
+    }
+  }, [gameMode]); // Refetch when gameMode changes to levelSelect
 
   // Fetch troop types
   useEffect(() => {
@@ -68,29 +79,38 @@ export default function RepDefenseGame() {
 
   // Start level
   const startLevel = (level) => {
+    const isBoss = level % 5 === 0; // Every 5 levels is a boss level
+    setIsBossLevel(isBoss);
+    
+    // Calculate boss stats for boss levels
+    if (isBoss) {
+      const bossHealthMultiplier = Math.min(5, 1 + (level / 20)); // Max 5x health at level 100
+      const bossDamageMultiplier = Math.min(3, 1 + (level / 25)); // Max 3x damage at level 100
+      const bossSize = Math.min(2.5, 1 + (level / 30)); // Max 2.5x size at level 100
+      
+      setBossData({
+        health: Math.floor((50 + (level - 1) * 10) * bossHealthMultiplier),
+        damage: Math.floor((5 + level * 0.5) * bossDamageMultiplier),
+        size: bossSize,
+        color: level >= 20 ? "#FF4444" : "#FFD700", // Gold for boss, red for normal enemy at level 20+
+        isBoss: level < 20 // Only boss if level < 20
+      });
+    } else {
+      setBossData(null);
+    }
+    
     setGameMode("levelPlaying");
     setSelectedLevel(level);
     setCurrentLevel(level);
     setCurrentWave(0);
-    setBaseHealth(100);
+    // Player tower HP = user's ELO
+    setPlayerTowerHealth(Math.floor(eloPoints));
+    // Enemy tower HP scales with level: 50 HP at level 1, increases by level
+    setEnemyTowerHealth(50 + (level - 1) * 10);
     setUserTroops([]);
     setEnemies([]);
-    setIsInfinityMode(false);
     isCompletingLevelRef.current = false; // Reset completion flag
     startWave(0, level);
-  };
-
-  // Start infinity mode
-  const startInfinity = () => {
-    setGameMode("infinityPlaying");
-    setCurrentLevel(0);
-    setCurrentWave(0);
-    setBaseHealth(100);
-    setUserTroops([]);
-    setEnemies([]);
-    setIsInfinityMode(true);
-    isCompletingLevelRef.current = false; // Reset completion flag
-    startWave(0, null);
   };
 
   // Start a new wave
@@ -99,26 +119,11 @@ export default function RepDefenseGame() {
 
     let enemyCount, baseEnemyHealth, baseDamage;
 
-    if (isInfinityMode || level === null) {
-      // Infinity mode: waves get progressively harder, but slower
-      // Difficulty affects progression speed
-      const difficultyProgression = {
-        easy: 0.5,   // Slow progression
-        medium: 0.8, // Normal progression
-        hard: 1.2,   // Fast progression
-      }[difficulty] || 0.8;
-
-      enemyCount = Math.floor(3 + newWave * 0.8 * difficultyProgression);
-      baseEnemyHealth = Math.floor(10 + newWave * 3 * difficultyProgression);
-      baseDamage = Math.floor(2 + newWave * 0.3 * difficultyProgression);
-    } else {
-      // Level mode: difficulty scales with level (1-500)
-      // Using exponential scaling so later levels are significantly harder
-      const levelMultiplier = Math.pow(1.08, level - 1); // 8% harder per level
-      enemyCount = Math.floor((2 + newWave * 1.2) * levelMultiplier);
-      baseEnemyHealth = Math.floor((5 + newWave * 3) * levelMultiplier);
-      baseDamage = Math.floor((1 + newWave * 0.3) * levelMultiplier);
-    }
+    // Level mode: difficulty scales with level
+    const levelMultiplier = Math.pow(1.08, level - 1);
+    enemyCount = Math.floor((2 + newWave * 1.2) * levelMultiplier);
+    baseEnemyHealth = Math.floor((5 + newWave * 3) * levelMultiplier);
+    baseDamage = Math.floor((1 + newWave * 0.3) * levelMultiplier);
 
     const difficultyMultiplier = {
       easy: 0.6,
@@ -129,20 +134,45 @@ export default function RepDefenseGame() {
     const newEnemies = [];
     const enemyColors = ["#FF4444", "#FF6666", "#FF8888", "#FFAAAA", "#CC0000", "#990000"];
 
+    // Check if this is a boss level wave (wave 2 of boss levels)
+    const isBossWave = isBossLevel && newWave === 2;
+
+    // Spawn enemies from left side (enemy tower at x=30) walking right
     for (let i = 0; i < Math.ceil(enemyCount * difficultyMultiplier); i++) {
-      const baseSpeed = 2.0 + (difficulty === "hard" ? 1.5 : difficulty === "medium" ? 1.0 : 0.5);
-      newEnemies.push({
-        id: `enemy-${Date.now()}-${i}`,
-        x: Math.random() * 400 + 50,
-        y: 350 + Math.random() * 50,
-        health: Math.floor(baseEnemyHealth * difficultyMultiplier),
-        maxHealth: Math.floor(baseEnemyHealth * difficultyMultiplier),
-        damage: Math.floor(baseDamage * difficultyMultiplier),
-        speed: baseSpeed + Math.random() * 1.0,
-        attackCooldown: 0,
-        color: enemyColors[Math.floor(Math.random() * enemyColors.length)],
-        shape: "circle",
-      });
+      const baseSpeed = 1.5 + (difficulty === "hard" ? 1.0 : difficulty === "medium" ? 0.5 : 0.2);
+      
+      // For boss wave, spawn one boss at the end
+      if (isBossWave && i === Math.ceil(enemyCount * difficultyMultiplier) - 1 && bossData) {
+        newEnemies.push({
+          id: `boss-${Date.now()}`,
+          x: 30 + Math.random() * 50,
+          y: 400,
+          health: bossData.health,
+          maxHealth: bossData.health,
+          damage: bossData.damage,
+          speed: baseSpeed * 0.5, // Boss is slower
+          attackCooldown: 0,
+          color: bossData.color,
+          shape: "star",
+          size: bossData.size || 1.5,
+          isBoss: bossData.isBoss,
+        });
+      } else {
+        newEnemies.push({
+          id: `enemy-${Date.now()}-${i}`,
+          x: 30 + Math.random() * 50, // Start near enemy tower (left side)
+          y: 400, // Ground level
+          health: Math.floor(baseEnemyHealth * difficultyMultiplier),
+          maxHealth: Math.floor(baseEnemyHealth * difficultyMultiplier),
+          damage: Math.floor(baseDamage * difficultyMultiplier),
+          speed: baseSpeed + Math.random() * 0.5,
+          attackCooldown: 0,
+          color: enemyColors[Math.floor(Math.random() * enemyColors.length)],
+          shape: "circle",
+          size: 1,
+          isBoss: false,
+        });
+      }
     }
 
     setCurrentWave(newWave);
@@ -203,8 +233,8 @@ export default function RepDefenseGame() {
             hitsRemaining: maxHits,
             color: troopType.color || "#4ECDC4",
             shape: troopType.shape || "circle",
-            x: Math.random() * 400 + 50,
-            y: 200 + Math.random() * 100,
+            x: 700 + Math.random() * 30, // Start near player tower (right side)
+            y: 400, // Ground level
             health: 15,
             maxHealth: 15,
             attackCooldown: 0,
@@ -248,7 +278,7 @@ export default function RepDefenseGame() {
 
   // Game loop
   useEffect(() => {
-    const isPlaying = gameMode === "levelPlaying" || gameMode === "infinityPlaying";
+    const isPlaying = gameMode === "levelPlaying";
     if (!isPlaying) {
       if (gameLoopRef.current) {
         cancelAnimationFrame(gameLoopRef.current);
@@ -265,35 +295,32 @@ export default function RepDefenseGame() {
       if (deltaTime >= tickRate) {
         lastTime = currentTime;
         
+        // Player troops: move left, fight enemies, attack enemy tower
         setUserTroops((prevTroops) => {
           return prevTroops.map((troop) => {
             let newCooldown = troop.attackCooldown - 1;
             let newX = troop.x;
-            let newY = troop.y;
             
             // Find nearest enemy
             const nearestEnemy = enemies.reduce((nearest, enemy) => {
-              const dist = Math.hypot(enemy.x - troop.x, enemy.y - troop.y);
-              if (!nearest || dist < Math.hypot(nearest.x - troop.x, nearest.y - troop.y)) {
+              const dist = Math.abs(enemy.x - troop.x);
+              if (!nearest || dist < Math.abs(nearest.x - troop.x)) {
                 return enemy;
               }
               return nearest;
             }, null);
             
             if (nearestEnemy) {
-              const dist = Math.hypot(nearestEnemy.x - troop.x, nearestEnemy.y - troop.y);
+              const dist = Math.abs(nearestEnemy.x - troop.x);
               
               // Move toward enemy if out of range
-              if (dist > 100) {
-                const dx = nearestEnemy.x - troop.x;
-                const dy = nearestEnemy.y - troop.y;
-                const moveSpeed = 3;
-                newX = troop.x + (dx / dist) * moveSpeed;
-                newY = troop.y + (dy / dist) * moveSpeed;
+              if (dist > 60) {
+                const moveSpeed = 2;
+                newX = troop.x - moveSpeed;
               }
               
               // Attack if in range
-              if (dist < 100) {
+              if (dist <= 60 && newCooldown <= 0) {
                 setEnemies((prevEnemies) => {
                   return prevEnemies.map((enemy) => {
                     if (enemy.id === nearestEnemy.id) {
@@ -303,50 +330,73 @@ export default function RepDefenseGame() {
                   });
                 });
                 newCooldown = 60 / troop.attackSpeed;
-                
-                // Troop takes damage when attacking (limited lifespan)
-                return { ...troop, hitsRemaining: troop.hitsRemaining - 1 };
+              }
+            } else {
+              // No enemies, move toward enemy tower (left side)
+              if (troop.x > 100) {
+                newX = troop.x - 2;
+              } else {
+                // Attack enemy tower
+                if (newCooldown <= 0) {
+                  setEnemyTowerHealth((prev) => Math.max(0, prev - troop.damage));
+                  newCooldown = 60 / troop.attackSpeed;
+                }
               }
             }
             
-            return { ...troop, x: newX, y: newY, attackCooldown: newCooldown };
+            return { ...troop, x: newX, attackCooldown: newCooldown };
           });
         });
 
+        // Enemy troops: move right, fight player troops, attack player tower
         setEnemies((prevEnemies) => {
           return prevEnemies.map((enemy) => {
             let newCooldown = enemy.attackCooldown - 1;
             let newX = enemy.x;
-            let newY = enemy.y;
             
-            const targetX = 250;
-            const targetY = 200;
-            const dx = targetX - enemy.x;
-            const dy = targetY - enemy.y;
-            const dist = Math.hypot(dx, dy);
+            // Find nearest player troop
+            const nearestTroop = userTroops.reduce((nearest, troop) => {
+              const dist = Math.abs(troop.x - enemy.x);
+              if (!nearest || dist < Math.abs(nearest.x - enemy.x)) {
+                return troop;
+              }
+              return nearest;
+            }, null);
             
-            if (dist > 50) {
-              newX = enemy.x + (dx / dist) * enemy.speed;
-              newY = enemy.y + (dy / dist) * enemy.speed;
-            } else {
-              if (newCooldown <= 0) {
-                setBaseHealth((prev) => Math.max(0, prev - enemy.damage));
-                newCooldown = 30;
-                
-                // Enemy damages nearby troops
+            if (nearestTroop) {
+              const dist = Math.abs(nearestTroop.x - enemy.x);
+              
+              // Move toward troop if out of range
+              if (dist > 60) {
+                newX = enemy.x + enemy.speed;
+              }
+              
+              // Attack if in range
+              if (dist <= 60 && newCooldown <= 0) {
                 setUserTroops((prevTroops) => {
                   return prevTroops.map((troop) => {
-                    const distToEnemy = Math.hypot(enemy.x - troop.x, enemy.y - troop.y);
-                    if (distToEnemy < 30) {
+                    if (troop.id === nearestTroop.id) {
                       return { ...troop, hitsRemaining: Math.max(0, troop.hitsRemaining - 1) };
                     }
                     return troop;
                   });
                 });
+                newCooldown = 30;
+              }
+            } else {
+              // No player troops, move toward player tower (right side)
+              if (enemy.x < 700) {
+                newX = enemy.x + enemy.speed;
+              } else {
+                // Attack player tower
+                if (newCooldown <= 0) {
+                  setPlayerTowerHealth((prev) => Math.max(0, prev - enemy.damage));
+                  newCooldown = 30;
+                }
               }
             }
             
-            return { ...enemy, x: newX, y: newY, attackCooldown: newCooldown };
+            return { ...enemy, x: newX, attackCooldown: newCooldown };
           });
         });
 
@@ -358,24 +408,23 @@ export default function RepDefenseGame() {
         setEnemies((prevEnemies) => {
           if (prevEnemies.length === 0) {
             setTimeout(() => {
-              if (isInfinityMode) {
-                // Infinity: next wave
-                startWave(currentWave, null);
-              } else {
-                // Level: check if level complete
-                const wavesPerLevel = 2;
-                if (currentWave >= wavesPerLevel) {
-                  completeLevel(true);
-                } else {
-                  startWave(currentWave, currentLevel);
-                }
+              // Level: spawn next wave
+              const wavesPerLevel = 2;
+              if (currentWave < wavesPerLevel) {
+                startWave(currentWave, currentLevel);
               }
             }, 500);
           }
           return prevEnemies;
         });
 
-        if (baseHealth <= 0) {
+        // Check win condition (enemy tower destroyed)
+        if (enemyTowerHealth <= 0 && !isCompletingLevelRef.current) {
+          completeLevel(true);
+        }
+
+        // Check lose condition (player tower destroyed)
+        if (playerTowerHealth <= 0 && !isCompletingLevelRef.current) {
           completeLevel(false);
         }
 
@@ -394,7 +443,7 @@ export default function RepDefenseGame() {
         cancelAnimationFrame(gameLoopRef.current);
       }
     };
-  }, [gameMode, speed, autoPlay, currentWave, currentLevel, baseHealth, enemies, autoPlayPurchase, isInfinityMode, troopMaxHits]);
+  }, [gameMode, speed, autoPlay, currentWave, currentLevel, playerTowerHealth, enemyTowerHealth, enemies, userTroops, autoPlayPurchase, isBossLevel, bossData, troopMaxHits]);
 
   // Complete level
   const completeLevel = async (won) => {
@@ -403,7 +452,7 @@ export default function RepDefenseGame() {
     isCompletingLevelRef.current = true;
     
     if (won) {
-      setGameMode(isInfinityMode ? "infinityGameOver" : "levelWon");
+      setGameMode("levelWon");
       // Max level is updated server-side and refreshed from API response
       
       // Show congratulations message
@@ -424,7 +473,7 @@ export default function RepDefenseGame() {
       setShowCongrats(true);
       setTimeout(() => setShowCongrats(false), 3000);
     } else {
-      setGameMode(isInfinityMode ? "infinityGameOver" : "levelLost");
+      setGameMode("levelLost");
     }
     
     try {
@@ -433,9 +482,9 @@ export default function RepDefenseGame() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           difficulty,
-          levelReached: isInfinityMode ? currentWave : currentLevel,
+          levelReached: currentLevel,
           result: won ? "win" : "loss",
-          isInfinityMode,
+          isInfinityMode: false,
         }),
       });
       
@@ -444,7 +493,8 @@ export default function RepDefenseGame() {
 
       if (data.ok) {
         // Update max level unlocked immediately from response
-        if (data.maxLevelUnlocked && !data.duplicate) {
+        console.log("Setting maxLevelUnlocked to:", data.maxLevelUnlocked);
+        if (data.maxLevelUnlocked) {
           setMaxLevelUnlocked(data.maxLevelUnlocked);
         }
 
@@ -528,35 +578,64 @@ export default function RepDefenseGame() {
     const render = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       
-      ctx.fillStyle = "#4CAF50";
-      ctx.fillRect(225, 175, 50, 50);
+      // Draw sky background
+      ctx.fillStyle = "#87CEEB";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw ground
+      ctx.fillStyle = "#8B4513";
+      ctx.fillRect(0, 420, canvas.width, 80);
+      ctx.fillStyle = "#228B22";
+      ctx.fillRect(0, 420, canvas.width, 20);
+      
+      // Draw player tower (right side)
+      ctx.fillStyle = "#696969";
+      ctx.fillRect(680, 300, 60, 120);
+      ctx.fillStyle = "#808080";
+      ctx.fillRect(690, 280, 40, 30);
       ctx.fillStyle = "#fff";
       ctx.font = "bold 12px Arial";
-      ctx.fillText("BASE", 232, 205);
+      ctx.fillText("YOU", 695, 295);
+      ctx.fillText(`${Math.floor(playerTowerHealth)}/${Math.floor(eloPoints)}`, 690, 315);
       
+      // Draw enemy tower (left side)
+      ctx.fillStyle = "#8B0000";
+      ctx.fillRect(30, 300, 60, 120);
+      ctx.fillStyle = "#A52A2A";
+      ctx.fillRect(40, 280, 40, 30);
+      ctx.fillStyle = "#fff";
+      ctx.fillText("ENEMY", 45, 295);
+      const enemyMaxHP = 50 + (currentLevel - 1) * 10;
+      ctx.fillText(`${Math.floor(enemyTowerHealth)}/${enemyMaxHP}`, 40, 315);
+      
+      // Draw user troops (walking right)
       userTroops.forEach((troop) => {
         drawShape(troop.x, troop.y, 10, troop.color || "#4ECDC4", troop.shape || "circle");
         ctx.fillStyle = "#333";
         ctx.fillRect(troop.x - 12, troop.y - 18, 24, 4);
         ctx.fillStyle = "#4CAF50";
-        ctx.fillRect(troop.x - 12, troop.y - 18, 24 * (troop.health / troop.maxHealth), 4);
+        ctx.fillRect(troop.x - 12, troop.y - 18, 24 * (troop.hitsRemaining / troop.maxHits), 4);
       });
       
+      // Draw enemies (walking left) - with boss size support
       enemies.forEach((enemy) => {
-        drawShape(enemy.x, enemy.y, 12, enemy.color || "#FF4444", enemy.shape || "circle");
+        const size = (enemy.size || 1) * 12;
+        drawShape(enemy.x, enemy.y, size, enemy.color || "#FF4444", enemy.shape || "circle");
         ctx.fillStyle = "#333";
-        ctx.fillRect(enemy.x - 14, enemy.y - 20, 28, 4);
+        const barWidth = 28 * (enemy.size || 1);
+        const barHeight = 4 * (enemy.size || 1);
+        ctx.fillRect(enemy.x - barWidth/2, enemy.y - 20 - barHeight, barWidth, barHeight);
         ctx.fillStyle = "#f44336";
-        ctx.fillRect(enemy.x - 14, enemy.y - 20, 28 * (enemy.health / enemy.maxHealth), 4);
+        ctx.fillRect(enemy.x - barWidth/2, enemy.y - 20 - barHeight, barWidth * (enemy.health / enemy.maxHealth), barHeight);
       });
       
-      if (gameMode === "levelPlaying" || gameMode === "infinityPlaying") {
+      if (gameMode === "levelPlaying") {
         requestAnimationFrame(render);
       }
     };
     
     render();
-  }, [gameMode, userTroops, enemies]);
+  }, [gameMode, userTroops, enemies, playerTowerHealth, enemyTowerHealth, eloPoints, currentLevel]);
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -574,17 +653,17 @@ export default function RepDefenseGame() {
       <div className="grid grid-cols-5 gap-4 mb-4">
         <div className="bg-white border rounded p-3">
           <div className="text-sm text-gray-600"><strong>ELO</strong></div>
-          <div className="text-xl font-bold">{eloPoints.toLocaleString()}</div>
+          <div className="text-xl font-bold">{displayEloPoints.toLocaleString()}</div>
           <p className="text-xs text-gray-500 mt-1">Exercise Points</p>
         </div>
         <div className="bg-white border rounded p-3">
           <div className="text-sm text-gray-600"><strong>GP</strong></div>
-          <div className="text-xl font-bold">{gamePoints.toLocaleString()}</div>
+          <div className="text-xl font-bold">{displayGamePoints.toLocaleString()}</div>
           <p className="text-xs text-gray-500 mt-1">Game Points</p>
         </div>
         <div className="bg-white border rounded p-3">
           <CoinIcon size={20} className="text-yellow-600 mb-2" />
-          <div className="text-xl font-bold text-yellow-600">{coins.toLocaleString()}</div>
+          <div className="text-xl font-bold text-yellow-600">{displayCoins.toLocaleString()}</div>
           <p className="text-xs text-gray-500 mt-1">Coins</p>
         </div>
         {(gameMode === "levelPlaying" || gameMode === "levelWon" || gameMode === "levelLost") && (
@@ -595,21 +674,15 @@ export default function RepDefenseGame() {
         )}
         {(gameMode === "levelPlaying" || gameMode === "levelWon" || gameMode === "levelLost") && (
           <div className="bg-white border rounded p-3">
-            <div className="text-sm text-gray-600">Base Health</div>
-            <div className="text-xl font-bold">{baseHealth}</div>
+            <div className="text-sm text-gray-600">Your Tower</div>
+            <div className="text-xl font-bold">{Math.floor(playerTowerHealth)}</div>
           </div>
         )}
-        {(gameMode === "infinityPlaying" || gameMode === "infinityGameOver") && (
-          <>
-            <div className="bg-white border rounded p-3">
-              <div className="text-sm text-gray-600">Wave</div>
-              <div className="text-xl font-bold">{currentWave}</div>
-            </div>
-            <div className="bg-white border rounded p-3">
-              <div className="text-sm text-gray-600">Base Health</div>
-              <div className="text-xl font-bold">{baseHealth}</div>
-            </div>
-          </>
+        {(gameMode === "levelPlaying" || gameMode === "levelWon" || gameMode === "levelLost") && (
+          <div className="bg-white border rounded p-3">
+            <div className="text-sm text-gray-600">Enemy Tower</div>
+            <div className="text-xl font-bold">{Math.floor(enemyTowerHealth)}</div>
+          </div>
         )}
       </div>
 
@@ -652,26 +725,16 @@ export default function RepDefenseGame() {
             </div>
             <p className="text-sm text-gray-500 mt-2">Max unlocked: Level {maxLevelUnlocked}</p>
           </div>
-
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold mb-4">Infinity Mode</h3>
-            <p className="text-gray-600 mb-4">Play endless waves. Survive as long as you can! Earn generous rewards that scale with wave count!</p>
-            <button
-              onClick={startInfinity}
-              className="bg-purple-500 text-white px-8 py-3 rounded hover:bg-purple-600 text-lg font-semibold"
-            >
-              Start Infinity Mode
-            </button>
-          </div>
         </div>
       )}
 
       {/* Game Playing */}
-      {(gameMode === "levelPlaying" || gameMode === "infinityPlaying") && (
+      {gameMode === "levelPlaying" && (
         <div className="bg-white border rounded p-4 mb-4">
           <div className="flex justify-between items-center mb-4">
             <div className="font-semibold">
-              {gameMode === "levelPlaying" ? `Level ${currentLevel}` : `Infinity Mode`} - Wave: {currentWave} | Enemies: {enemies.length}
+              Level {currentLevel} - Wave: {currentWave} | Enemies: {enemies.length}
+              {isBossLevel && <span className="ml-2 text-yellow-600 font-bold">⭐ BOSS LEVEL</span>}
             </div>
             <div className="flex gap-2">
               <select
@@ -686,6 +749,8 @@ export default function RepDefenseGame() {
                 <option value={10}>10x</option>
                 <option value={20}>20x</option>
                 <option value={50}>50x</option>
+                <option value={100}>100x</option>
+                <option value={200}>200x</option>
               </select>
               <button
                 onClick={() => setAutoPlay(!autoPlay)}
@@ -704,8 +769,8 @@ export default function RepDefenseGame() {
           
           <canvas
             ref={canvasRef}
-            width={500}
-            height={400}
+            width={800}
+            height={500}
             className="border rounded mx-auto block"
           />
         </div>
@@ -750,6 +815,7 @@ export default function RepDefenseGame() {
               }[difficulty] || 1.0;
               const levelCostMultiplier = Math.pow(1.02, Math.max(0, currentLevel - 1));
               const scaledCost = Math.floor(troop.cost * difficultyMultiplier * levelCostMultiplier);
+              const displayScaledCost = Math.round(scaledCost); // Round for display
               
               return (
                 <div
@@ -803,7 +869,7 @@ export default function RepDefenseGame() {
               🎉 You won {lastCoinsEarned > 0 ? lastCoinsEarned : Math.floor(30 + (currentLevel - 1) * 6)} Coins!
             </p>
             <p className="text-sm text-gray-600 mt-1">
-              Total Coins: {coins.toLocaleString()}
+              Total Coins: {displayCoins.toLocaleString()}
             </p>
           </div>
           <p className="mb-4">Great job! You've unlocked the next level.</p>
@@ -846,47 +912,16 @@ export default function RepDefenseGame() {
         </div>
       )}
 
-      {/* Infinity Game Over */}
-      {gameMode === "infinityGameOver" && (
-        <div className="bg-white border rounded p-6 mb-4">
-          <h2 className="text-2xl font-bold mb-4">Game Over!</h2>
-          <p className="mb-2">You survived {currentWave} waves in Infinity Mode!</p>
-          <div className="mb-4 p-4 bg-yellow-50 rounded border border-yellow-200">
-            <p className="text-lg font-semibold text-yellow-800">
-              🎉 You won {lastCoinsEarned > 0 ? lastCoinsEarned : currentWave * 10} Coins!
-            </p>
-            <p className="text-sm text-gray-600 mt-1">
-              Total Coins: {coins.toLocaleString()}
-            </p>
-          </div>
-          <p className="mb-4 text-gray-600">Your base was destroyed.</p>
-          <div className="flex gap-2">
-            <button
-              onClick={startInfinity}
-              className="bg-purple-500 text-white px-6 py-2 rounded hover:bg-purple-600"
-            >
-              Play Again
-            </button>
-            <button
-              onClick={() => setGameMode("levelSelect")}
-              className="bg-gray-500 text-white px-6 py-2 rounded hover:bg-gray-600"
-            >
-              Back to Menu
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Instructions */}
       <div className="bg-gray-50 border rounded p-4">
         <h3 className="font-semibold mb-2">How to Play</h3>
         <ul className="text-sm text-gray-600 list-disc list-inside">
-          <li><strong>Levels:</strong> Progress through 500 levels, each getting harder. Must beat a level to unlock the next.</li>
-          <li><strong>Infinity Mode:</strong> Endless waves that get progressively harder. Earn the same per-wave value as normal levels!</li>
+          <li><strong>Levels:</strong> Progress through 500 levels, each getting harder. Every 5 levels has a boss!</li>
+          <li><strong>Bosses:</strong> Bigger, stronger enemies appear at levels 5, 10, 15, 20... After level 20, they become normal troops.</li>
           <li>Use points to buy troops that auto-fight enemies</li>
           <li>Protect your base from waves of enemies</li>
-          <li>Win games to gain ELO rating</li>
-          <li>Use 50x speed, 20x speed, and auto-play for convenience</li>
+          <li>Win games to gain coins (rewards diminish if you farm the same level)</li>
+          <li>Use 100x/200x speed and auto-play for convenience</li>
         </ul>
       </div>
 

@@ -1,12 +1,13 @@
 import { prisma } from "../../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
-// GET /api/leaderboard/streaks?type=daily|workout&scope=everyone|friends
+// GET /api/leaderboard/streaks?type=daily|workout&scope=everyone|friends&gender=all|male|female
 // Returns leaderboard for daily challenge streak or workout streak
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") || "daily"; // daily or workout
   const scope = searchParams.get("scope") || "everyone"; // everyone or friends
+  const gender = searchParams.get("gender") || "all"; // all, male, or female
 
   if (!["daily", "workout"].includes(type)) {
     return Response.json({ error: "Invalid type. Use 'daily' or 'workout'" }, { status: 400 });
@@ -32,6 +33,12 @@ export async function GET(request) {
     allowedUserIds = [...friendIds, currentUserId];
   }
 
+  // Build gender filter
+  let genderFilter = {};
+  if (gender !== "all") {
+    genderFilter = { gender: gender === "male" ? "male" : "female" };
+  }
+
   let leaderboard;
 
   if (type === "daily") {
@@ -47,6 +54,7 @@ export async function GET(request) {
       where: {
         dailyChallengeStreak: { gt: 0 },
         ...(allowedUserIds ? { id: { in: allowedUserIds } } : {}),
+        ...(gender !== "all" ? genderFilter : {}),
       },
       orderBy: [
         { dailyChallengeStreak: "desc" },
@@ -67,6 +75,7 @@ export async function GET(request) {
       where: {
         currentStreak: { gt: 0 },
         ...(allowedUserIds ? { id: { in: allowedUserIds } } : {}),
+        ...(gender !== "all" ? genderFilter : {}),
       },
       orderBy: [
         { currentStreak: "desc" },

@@ -169,7 +169,7 @@ export default function LogForm({ exercises }) {
         newAnimations.push({
           id: `elo-${Date.now()}`,
           type: "elo",
-          amount: data.eloEarned,
+          amount: Math.round(data.eloEarned), // Round for display
         });
       }
 

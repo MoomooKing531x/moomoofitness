@@ -1,12 +1,13 @@
 import { prisma } from "../../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
-// GET /api/leaderboard/totals?type=challenges|workouts&scope=everyone|friends
+// GET /api/leaderboard/totals?type=challenges|workouts&scope=everyone|friends&gender=all|male|female
 // Returns leaderboard for total daily challenges done or total workout days
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
   const type = searchParams.get("type") || "challenges"; // challenges or workouts
   const scope = searchParams.get("scope") || "everyone"; // everyone or friends
+  const gender = searchParams.get("gender") || "all"; // all, male, or female
 
   if (!["challenges", "workouts"].includes(type)) {
     return Response.json({ error: "Invalid type. Use 'challenges' or 'workouts'" }, { status: 400 });
@@ -32,6 +33,12 @@ export async function GET(request) {
     allowedUserIds = [...friendIds, currentUserId];
   }
 
+  // Build gender filter
+  let genderFilter = {};
+  if (gender !== "all") {
+    genderFilter = { gender: gender === "male" ? "male" : "female" };
+  }
+
   let leaderboard;
 
   if (type === "challenges") {
@@ -47,6 +54,7 @@ export async function GET(request) {
       where: {
         totalDailyChallengesDone: { gt: 0 },
         ...(allowedUserIds ? { id: { in: allowedUserIds } } : {}),
+        ...(gender !== "all" ? genderFilter : {}),
       },
       orderBy: [
         { totalDailyChallengesDone: "desc" },
@@ -67,6 +75,7 @@ export async function GET(request) {
       where: {
         totalWorkoutDaysDone: { gt: 0 },
         ...(allowedUserIds ? { id: { in: allowedUserIds } } : {}),
+        ...(gender !== "all" ? genderFilter : {}),
       },
       orderBy: [
         { totalWorkoutDaysDone: "desc" },

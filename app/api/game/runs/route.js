@@ -2,29 +2,7 @@
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
 // Calculate coins earned - increasing rewards per level (3x multiplier)
-function calculateCoinsEarned(levelReached, difficulty, isInfinityMode = false) {
-  if (isInfinityMode) {
-    // Infinity mode: Cumulative rewards - sum of all waves from 1 to reached
-    // Wave 1: 30, Wave 2: 35, Wave 3: 40, Wave 4: 45, Wave 5: 50, etc.
-    // Formula per wave: 30 + (wave - 1) * 5
-    // Sum formula: 2.5 * n² + 27.5 * n
-    let baseCoins = Math.floor(2.5 * Math.pow(levelReached, 2) + 27.5 * levelReached);
-
-    // Add bonus for higher waves (waves 20+ get extra scaling)
-    if (levelReached > 20) {
-      baseCoins += Math.floor(Math.pow(levelReached - 20, 1.2) * 50);
-    }
-
-    // Difficulty multiplier
-    const difficultyMultiplier = {
-      easy: 0.8,
-      medium: 1.0,
-      hard: 1.3, // Hard mode gives 30% bonus
-    }[difficulty] || 1.0;
-
-    return Math.floor(baseCoins * difficultyMultiplier);
-  }
-
+function calculateCoinsEarned(levelReached, difficulty) {
   // Level mode: Double rewards (2x original)
   // Level 1: 60 coins, Level 2: 72, Level 3: 84, Level 4: 96, etc.
   // Formula: 60 + (level - 1) * 12 + additional scaling for higher levels
@@ -49,7 +27,7 @@ export async function POST(request) {
   const userId = getUserIdFromCookies();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { difficulty, levelReached, result, isInfinityMode } = await request.json();
+  const { difficulty, levelReached, result } = await request.json();
 
   if (!["easy", "medium", "hard"].includes(difficulty)) {
     return Response.json({ error: "Invalid difficulty." }, { status: 400 });
@@ -64,35 +42,38 @@ export async function POST(request) {
     return Response.json({ error: "Invalid level reached." }, { status: 400 });
   }
 
-  // Calculate coins earned
-  // For infinity mode, award coins even on loss (based on waves defeated)
-  // For level mode, only award coins on win
-  const coinsEarned = (isInfinityMode || result === "win") ? calculateCoinsEarned(parsedLevelReached, difficulty, isInfinityMode) : 0;
+  // Calculate base coins earned
+  const baseCoinsEarned = result === "win" ? calculateCoinsEarned(parsedLevelReached, difficulty) : 0;
 
-  // Check for duplicate game runs within last 10 seconds to prevent multiple submissions
-  const tenSecondsAgo = new Date(Date.now() - 10000);
-  const recentRun = await prisma.gameRun.findFirst({
-    where: {
-      userId,
-      difficulty,
-      levelReached: parsedLevelReached,
-      ...(isInfinityMode ? {} : { result }), // Only check result for level mode
-      playedAt: { gte: tenSecondsAgo }
-    },
-    orderBy: { playedAt: 'desc' }
-  });
+  // Apply diminishing rewards for level mode wins
+  let coinsEarned = baseCoinsEarned;
+  let completionCount = 0;
 
-  if (recentRun) {
-    // Return the existing game run data instead of creating a duplicate
-    return Response.json({
-      ok: true,
-      coinsEarned: recentRun.coinsEarned,
-      newCoins: 0, // No additional coins since this was a duplicate
-      levelReached: parsedLevelReached,
-      result,
-      maxLevelUnlocked: isInfinityMode ? user?.maxGameLevelReached || 1 : null,
-      duplicate: true,
+  if (result === "win") {
+    // Check if level completion exists and if it needs reset (3 days)
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+    
+    let levelCompletion = await prisma.levelCompletion.findUnique({
+      where: { userId_level: { userId, level: parsedLevelReached } }
     });
+
+    if (levelCompletion) {
+      // Check if reset is needed (3 days since last reset)
+      if (levelCompletion.lastResetAt < threeDaysAgo) {
+        // Reset completion count
+        levelCompletion = await prisma.levelCompletion.update({
+          where: { userId_level: { userId, level: parsedLevelReached } },
+          data: { completionCount: 0, lastResetAt: new Date() }
+        });
+      }
+      completionCount = levelCompletion.completionCount;
+    }
+
+    // Calculate diminished reward: 100% -> 50% -> 25% -> 12.5% -> ... until 1 coin minimum
+    if (completionCount > 0) {
+      const diminishingFactor = Math.pow(0.5, completionCount);
+      coinsEarned = Math.max(1, Math.floor(baseCoinsEarned * diminishingFactor));
+    }
   }
 
   // Get current user data
@@ -103,6 +84,39 @@ export async function POST(request) {
 
   const currentElo = user?.elo || 0;
   const currentCoins = user?.coins || 0;
+  const currentMaxLevel = user?.maxGameLevelReached || 1;
+
+  // Check for duplicate game runs within last 10 seconds to prevent multiple submissions
+  const tenSecondsAgo = new Date(Date.now() - 10000);
+  const recentRun = await prisma.gameRun.findFirst({
+    where: {
+      userId,
+      difficulty,
+      levelReached: parsedLevelReached,
+      result,
+      playedAt: { gte: tenSecondsAgo }
+    },
+    orderBy: { playedAt: 'desc' }
+  });
+
+  if (recentRun) {
+    // Return the existing game run data instead of creating a duplicate
+    // But fetch current user data to get the actual max level
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { maxGameLevelReached: true }
+    });
+    
+    return Response.json({
+      ok: true,
+      coinsEarned: recentRun.coinsEarned,
+      newCoins: 0, // No additional coins since this was a duplicate
+      levelReached: parsedLevelReached,
+      result,
+      maxLevelUnlocked: currentUser?.maxGameLevelReached || 1,
+      duplicate: true,
+    });
+  }
 
   // Record the game run
   await prisma.gameRun.create({
@@ -112,28 +126,41 @@ export async function POST(request) {
       levelReached: parsedLevelReached,
       coinsEarned,
       result,
-      isInfinityMode: isInfinityMode || false,
+      isInfinityMode: false,
     },
   });
 
-  // Update user's coins and max level
-  // For infinity mode, only update coins (not max level)
-  // For level mode, update both coins and max level on win
-  let updatedUser;
-  if (isInfinityMode) {
-    // Infinity mode: only update coins
-    updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: { coins: { increment: coinsEarned } },
-      select: { elo: true, coins: true, maxGameLevelReached: true },
+  // Update level completion tracking for level mode wins
+  if (result === "win") {
+    await prisma.levelCompletion.upsert({
+      where: { userId_level: { userId, level: parsedLevelReached } },
+      update: {
+        completionCount: { increment: 1 },
+        lastCompletedAt: new Date()
+      },
+      create: {
+        userId,
+        level: parsedLevelReached,
+        completionCount: 1,
+        lastCompletedAt: new Date(),
+        lastResetAt: new Date()
+      }
     });
-  } else if (result === "win") {
+  }
+
+  // Update user's coins and max level
+  // Only update coins and max level on win
+  let updatedUser;
+  if (result === "win") {
     // Level mode win: update coins and max level
+    // Max level should be the greater of: current max or (completed level + 1)
+    const newMaxLevel = Math.max(currentMaxLevel, parsedLevelReached + 1);
+    
     updatedUser = await prisma.user.update({
       where: { id: userId },
       data: {
         coins: { increment: coinsEarned },
-        maxGameLevelReached: Math.max(user?.maxGameLevelReached || 1, parsedLevelReached + 1)
+        maxGameLevelReached: newMaxLevel
       },
       select: { elo: true, coins: true, maxGameLevelReached: true },
     });
@@ -147,7 +174,7 @@ export async function POST(request) {
     newCoins: updatedUser.coins,
     levelReached: parsedLevelReached,
     result,
-    maxLevelUnlocked: isInfinityMode ? user?.maxGameLevelReached || 1 : updatedUser.maxGameLevelReached,
+    maxLevelUnlocked: updatedUser.maxGameLevelReached,
     duplicate: false,
   });
 }

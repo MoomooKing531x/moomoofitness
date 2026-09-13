@@ -1,11 +1,12 @@
 ﻿import { prisma } from "../../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
-// GET /api/game/leaderboard?scope=everyone|friends&search=username
+// GET /api/game/leaderboard?scope=everyone|friends&gender=all|male|female&search=username
 export async function GET(request) {
   const currentUserId = getUserIdFromCookies();
   const { searchParams } = new URL(request.url);
   const scope = searchParams.get("scope") || "everyone";
+  const gender = searchParams.get("gender") || "all";
   const search = (searchParams.get("search") || "").trim().toLowerCase();
 
   // Build the "which users count" filter for friends-only scope.
@@ -26,9 +27,18 @@ export async function GET(request) {
     allowedUserIds = [...friendIds, currentUserId];
   }
 
+  // Build gender filter
+  let genderFilter = {};
+  if (gender !== "all") {
+    genderFilter = { gender: gender === "male" ? "male" : "female" };
+  }
+
   // Get all users with their game run coin totals
   const allUsers = await prisma.user.findMany({
-    where: allowedUserIds ? { id: { in: allowedUserIds } } : {},
+    where: {
+      ...(allowedUserIds ? { id: { in: allowedUserIds } } : {}),
+      ...(gender !== "all" ? genderFilter : {}),
+    },
     select: {
       id: true,
       username: true,

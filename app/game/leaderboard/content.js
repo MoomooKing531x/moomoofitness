@@ -6,6 +6,7 @@ import Link from "next/link";
 export default function GameLeaderboardContent() {
   const [leaderboard, setLeaderboard] = useState(null);
   const [scope, setScope] = useState("everyone");
+  const [gender, setGender] = useState("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState(null);
@@ -24,12 +25,12 @@ export default function GameLeaderboardContent() {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [scope]);
+  }, [scope, gender]);
 
   const fetchLeaderboard = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/game/leaderboard?scope=${scope}`);
+      const res = await fetch(`/api/game/leaderboard?scope=${scope}&gender=${gender}`);
       const data = await res.json();
       setLeaderboard(data);
     } catch (error) {
@@ -47,7 +48,7 @@ export default function GameLeaderboardContent() {
     
     setLoading(true);
     try {
-      const res = await fetch(`/api/game/leaderboard?scope=${scope}&search=${encodeURIComponent(search)}`);
+      const res = await fetch(`/api/game/leaderboard?scope=${scope}&gender=${gender}&search=${encodeURIComponent(search)}`);
       const data = await res.json();
       setLeaderboard(data);
     } catch (error) {
@@ -83,6 +84,30 @@ export default function GameLeaderboardContent() {
           }`}
         >
           Friends
+        </button>
+        <button
+          onClick={() => setGender("all")}
+          className={`px-4 py-2 rounded ${
+            gender === "all" ? "bg-blue-500 text-white" : "bg-gray-200"
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setGender("male")}
+          className={`px-4 py-2 rounded ${
+            gender === "male" ? "bg-blue-500 text-white" : "bg-gray-200"
+          }`}
+        >
+          Male
+        </button>
+        <button
+          onClick={() => setGender("female")}
+          className={`px-4 py-2 rounded ${
+            gender === "female" ? "bg-blue-500 text-white" : "bg-gray-200"
+          }`}
+        >
+          Female
         </button>
       </div>
 

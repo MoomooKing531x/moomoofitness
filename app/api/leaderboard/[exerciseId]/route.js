@@ -2,7 +2,7 @@ const { prisma } = require("../../../../lib/db");
 const { getUserIdFromCookies } = require("../../../../lib/auth");
 const { windowStart } = require("../../../../lib/dates");
 
-// GET /api/leaderboard/:exerciseId?window=today|weekly|monthly|yearly|alltime&scope=everyone|friends&search=username
+// GET /api/leaderboard/:exerciseId?window=today|weekly|monthly|yearly|alltime&scope=everyone|friends&gender=all|male|female&search=username
 export async function GET(request, { params }) {
   const { exerciseId } = params;
   const currentUserId = getUserIdFromCookies();
@@ -10,6 +10,7 @@ export async function GET(request, { params }) {
   const window = searchParams.get("window") || "alltime";
   const period = searchParams.get("period") || window; // support both "window" and "period"
   const scope = searchParams.get("scope") || "everyone";
+  const gender = searchParams.get("gender") || "all";
   const search = (searchParams.get("search") || "").trim().toLowerCase();
 
   const exercise = await prisma.exercise.findUnique({ where: { id: exerciseId } });
@@ -35,11 +36,26 @@ export async function GET(request, { params }) {
 
   const dateFilter = windowStart(period);
 
+  // Build gender filter
+  let genderFilter = {};
+  if (gender !== "all") {
+    // First get all users with their gender to filter by gender
+    const allUsers = await prisma.user.findMany({
+      where: {
+        gender: gender === "male" ? "male" : "female",
+      },
+      select: { id: true },
+    });
+    const genderUserIds = allUsers.map((u) => u.id);
+    genderFilter = { userId: { in: genderUserIds } };
+  }
+
   const logs = await prisma.log.findMany({
     where: {
       exerciseId,
       ...(dateFilter ? { date: { gte: dateFilter } } : {}),
       ...(allowedUserIds ? { userId: { in: allowedUserIds } } : {}),
+      ...(gender !== "all" ? genderFilter : {}),
     },
     select: {
       userId: true,
