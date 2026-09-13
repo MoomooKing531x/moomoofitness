@@ -3,8 +3,9 @@ import { useState } from "react";
 
 export default function ResetAccountButton() {
   const [step, setStep] = useState(0);
-  const [password1, setPassword1] = useState("");
-  const [password2, setPassword2] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -16,18 +17,29 @@ export default function ResetAccountButton() {
     },
     {
       title: "Enter Your Username",
-      message: "Type your username as your password to confirm.",
+      message: "Type your username to confirm.",
       buttonText: "Continue",
     },
     {
-      title: "Confirm Username",
-      message: "Type your username again to confirm.",
+      title: "Enter Your Password",
+      message: "Type your password to confirm.",
       buttonText: "Continue",
     },
     {
-      title: "⚠️ FINAL WARNING",
-      message: "This will permanently delete: ALL exercise logs, streaks, coins, cosmetics, friends, bets, and game progress. This action CANNOT be undone.",
-      buttonText: "I AM SURE - RESET MY ACCOUNT",
+      title: "Confirm Your Password",
+      message: "Type your password again to confirm.",
+      buttonText: "Continue",
+    },
+    {
+      title: "⚠️ WARNING",
+      message: "This action is IRREVERSIBLE. It will permanently delete: ALL exercise logs, streaks, coins, cosmetics, friends, bets, and game progress.",
+      buttonText: "I Understand",
+      danger: true,
+    },
+    {
+      title: "⚠️ FINAL CONFIRMATION",
+      message: "Are you absolutely sure you want to reset your account? This cannot be undone.",
+      buttonText: "YES, RESET MY ACCOUNT",
       danger: true,
     },
   ];
@@ -36,28 +48,36 @@ export default function ResetAccountButton() {
     setError("");
 
     if (step === 1) {
-      if (!password1) {
+      if (!username) {
         setError("Please enter your username");
         return;
       }
       setStep(2);
     } else if (step === 2) {
-      if (!password2) {
-        setError("Please enter your username again");
-        return;
-      }
-      if (password1 !== password2) {
-        setError("Usernames do not match");
+      if (!password) {
+        setError("Please enter your password");
         return;
       }
       setStep(3);
     } else if (step === 3) {
+      if (!confirmPassword) {
+        setError("Please confirm your password");
+        return;
+      }
+      if (password !== confirmPassword) {
+        setError("Passwords do not match");
+        return;
+      }
+      setStep(4);
+    } else if (step === 4) {
+      setStep(5);
+    } else if (step === 5) {
       setLoading(true);
       try {
         const res = await fetch("/api/user/reset", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ password1, password2 }),
+          body: JSON.stringify({ username, password }),
         });
 
         const data = await res.json();
@@ -80,8 +100,9 @@ export default function ResetAccountButton() {
 
   const handleCancel = () => {
     setStep(0);
-    setPassword1("");
-    setPassword2("");
+    setUsername("");
+    setPassword("");
+    setConfirmPassword("");
     setError("");
   };
 
@@ -106,8 +127,8 @@ export default function ResetAccountButton() {
       {step === 1 && (
         <input
           type="text"
-          value={password1}
-          onChange={(e) => setPassword1(e.target.value)}
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
           placeholder="Enter your username"
           className="w-full border border-red-300 rounded-md px-3 py-2 mb-4"
         />
@@ -115,10 +136,20 @@ export default function ResetAccountButton() {
 
       {step === 2 && (
         <input
-          type="text"
-          value={password2}
-          onChange={(e) => setPassword2(e.target.value)}
-          placeholder="Enter your username again"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Enter your password"
+          className="w-full border border-red-300 rounded-md px-3 py-2 mb-4"
+        />
+      )}
+
+      {step === 3 && (
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="Confirm your password"
           className="w-full border border-red-300 rounded-md px-3 py-2 mb-4"
         />
       )}

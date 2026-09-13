@@ -1,4 +1,4 @@
-import { prisma } from "../../../../lib/db.js";
+import { prisma, bcrypt } from "../../../../lib/db.js";
 import { getUserIdFromCookies } from "../../../../lib/auth.js";
 
 export async function POST(request) {
@@ -8,27 +8,30 @@ export async function POST(request) {
       return Response.json({ error: "Not authenticated" }, { status: 401 });
     }
 
-    const { password1, password2 } = await request.json();
+    const { username, password } = await request.json();
 
-    if (!password1 || !password2) {
-      return Response.json({ error: "Passwords required" }, { status: 400 });
+    if (!username || !password) {
+      return Response.json({ error: "Username and password required" }, { status: 400 });
     }
 
-    if (password1 !== password2) {
-      return Response.json({ error: "Passwords do not match" }, { status: 400 });
-    }
-
-    // Get user to verify password matches username
+    // Get user to verify credentials
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { username: true },
+      select: { username: true, passwordHash: true },
     });
 
     if (!user) {
       return Response.json({ error: "User not found" }, { status: 404 });
     }
 
-    if (password1 !== user.username) {
+    // Verify username matches
+    if (username !== user.username) {
+      return Response.json({ error: "Incorrect username" }, { status: 403 });
+    }
+
+    // Verify password matches
+    const passwordMatch = await bcrypt.compare(password, user.passwordHash);
+    if (!passwordMatch) {
       return Response.json({ error: "Incorrect password" }, { status: 403 });
     }
 
