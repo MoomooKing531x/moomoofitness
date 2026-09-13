@@ -47,10 +47,10 @@ export async function GET() {
     pattern.dates.push(log.date);
   });
 
-  // Filter patterns that appear at least 3 times in the last 30 days
-  // This ensures consistency (not just one random log)
+  // Filter patterns that appear at least 1 time in the last 30 days
+  // Changed from 3 to 1 to show recent exercises immediately
   const consistentPatterns = Array.from(patterns.values())
-    .filter((p) => p.count >= 3)
+    .filter((p) => p.count >= 1)
     .sort((a, b) => b.count - a.count)
     .slice(0, 10);
 

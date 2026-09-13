@@ -10,8 +10,17 @@ export default function DailyChallengeCard() {
 
   useEffect(() => {
     fetch("/api/challenge")
-      .then((r) => r.json())
-      .then(setData);
+      .then((r) => {
+        if (!r.ok) {
+          throw new Error("Failed to fetch challenge");
+        }
+        return r.json();
+      })
+      .then(setData)
+      .catch((err) => {
+        console.error("Error fetching challenge:", err);
+        setData(null);
+      });
   }, []);
 
   async function complete() {

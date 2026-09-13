@@ -85,6 +85,6 @@ export async function POST(request) {
     return Response.json({ ok: true });
   } catch (error) {
     console.error("Error resetting user:", error);
-    return Response.json({ error: "Internal server error" }, { status: 500 });
+    return Response.json({ error: "Internal server error: " + error.message }, { status: 500 });
   }
 }
