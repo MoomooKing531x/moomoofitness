@@ -86,12 +86,12 @@ export default function LogForm({ exercises }) {
 
   // Calculate total amount: reps x sets (or just reps if sets is empty)
   const calculateTotal = () => {
-    const repsNum = parseInt(reps) || 0;
+    const repsNum = isRunning ? parseFloat(reps) || 0 : parseInt(reps) || 0;
     const setsNum = parseInt(sets) || 0;
     if (repsNum === 0) return 0;
     // For both time-based and reps-based: multiply by sets (default to 1 if sets is 0)
     const actualSets = setsNum || 1;
-    return repsNum * actualSets;
+    return isRunning ? repsNum : repsNum * actualSets;
   };
 
   const total = calculateTotal();
@@ -100,7 +100,8 @@ export default function LogForm({ exercises }) {
     e.preventDefault();
     setMessage("");
 
-    if (!reps || parseInt(reps) <= 0) {
+    const repsNum = isRunning ? parseFloat(reps) : parseInt(reps);
+    if (!reps || repsNum <= 0) {
       setMessage("Please enter a valid amount.");
       return;
     }
@@ -109,13 +110,13 @@ export default function LogForm({ exercises }) {
       ? {
           customName,
           amount: total,
-          reps: isTimeBasedExercise ? null : parseInt(reps),
+          reps: isTimeBasedExercise ? null : (isRunning ? repsNum : parseInt(reps)),
           sets: isTimeBasedExercise ? null : (parseInt(sets) || 1),
         }
       : {
           exerciseId: selectedId,
           amount: total,
-          reps: isTimeBasedExercise ? null : parseInt(reps),
+          reps: isTimeBasedExercise ? null : (isRunning ? repsNum : parseInt(reps)),
           sets: isTimeBasedExercise ? null : (parseInt(sets) || 1),
         };
 
@@ -255,8 +256,8 @@ export default function LogForm({ exercises }) {
           </label>
           <input
             type="number"
-            min="1"
-            step="1"
+            min={isRunning ? "0.1" : "1"}
+            step={isRunning ? "0.1" : "1"}
             className="border border-gray-300 rounded-md px-3 py-2 w-24"
             value={reps}
             onChange={(e) => setReps(e.target.value)}
