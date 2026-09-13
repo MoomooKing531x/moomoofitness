@@ -2,11 +2,36 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
+const ENCOURAGEMENT_MESSAGES = [
+  "Keep going!",
+  "Nice!",
+  "Great work!",
+  "You're crushing it!",
+  "Awesome!",
+  "Keep it up!",
+  "💪 Strong!",
+  "Excellent!",
+  "Way to go!",
+  "You got this!",
+  "Impressive!",
+  "Phenomenal!",
+  "That's the spirit!",
+  "Nailed it!",
+  "Keep pushing!",
+  "Unstoppable!",
+  "Pure power!",
+  "Legendary!",
+];
+
 export default function RecentExercises({ exercises }) {
   const router = useRouter();
   const [patterns, setPatterns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(new Set());
+  const [message, setMessage] = useState("");
+  const [floatingAnimations, setFloatingAnimations] = useState([]);
+  const [encouragementMsg, setEncouragementMsg] = useState("");
+  const [showEncouragement, setShowEncouragement] = useState(false);
 
   // Load dismissed patterns from localStorage
   useEffect(() => {
@@ -49,7 +74,7 @@ export default function RecentExercises({ exercises }) {
     const exercise = exercises.find((e) => e.name === pattern.exerciseName);
 
     if (!exercise) {
-      alert("Exercise not found");
+      setMessage("Exercise not found");
       return;
     }
 
@@ -60,6 +85,8 @@ export default function RecentExercises({ exercises }) {
       sets: pattern.unit === "seconds" ? null : 1,
     };
 
+    setMessage("");
+
     try {
       const res = await fetch("/api/logs", {
         method: "POST",
@@ -67,18 +94,47 @@ export default function RecentExercises({ exercises }) {
         body: JSON.stringify(body),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        alert(`Logged ${pattern.amount} ${pattern.unit} of ${pattern.exerciseName}! Streak: ${data.currentStreak} days 🔥`);
-        // Dispatch event to notify bet components to refresh
-        window.dispatchEvent(new CustomEvent("betsUpdated"));
-        router.refresh();
-      } else {
-        alert("Failed to log exercise");
+      if (!res.ok) {
+        const error = await res.json();
+        setMessage(error.error || "Failed to log exercise");
+        return;
       }
+
+      const data = await res.json();
+
+      // Show random encouragement message
+      const randomEncouragement = ENCOURAGEMENT_MESSAGES[Math.floor(Math.random() * ENCOURAGEMENT_MESSAGES.length)];
+      setEncouragementMsg(randomEncouragement);
+      setShowEncouragement(true);
+      setTimeout(() => setShowEncouragement(false), 2500);
+
+      // Create floating animations for points and ELO
+      const newAnimations = [];
+
+      if (data.eloEarned) {
+        newAnimations.push({
+          id: `elo-${Date.now()}`,
+          type: "elo",
+          amount: data.eloEarned,
+        });
+      }
+
+      if (newAnimations.length > 0) {
+        setFloatingAnimations((prev) => [...prev, ...newAnimations]);
+        setTimeout(() => {
+          setFloatingAnimations((prev) =>
+            prev.filter((anim) => !newAnimations.find((na) => na.id === anim.id))
+          );
+        }, 2000);
+      }
+
+      setMessage(`Logged! Streak: ${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} 🔥`);
+      // Dispatch event to notify bet components to refresh
+      window.dispatchEvent(new CustomEvent("betsUpdated"));
+      router.refresh();
     } catch (error) {
       console.error("Error logging exercise:", error);
-      alert("Network error");
+      setMessage("Network error. Please try again.");
     }
   }
 
@@ -149,6 +205,47 @@ export default function RecentExercises({ exercises }) {
           );
         })}
       </div>
+      {message && <p className="text-sm mt-3 text-gray-700">{message}</p>}
+
+      {/* Encouragement Animation */}
+      {showEncouragement && (
+        <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50">
+          <div className="animate-bounce text-6xl font-bold text-green-500 drop-shadow-lg">
+            {encouragementMsg}
+          </div>
+        </div>
+      )}
+
+      {/* Floating Animations */}
+      <div className="fixed inset-0 pointer-events-none">
+        {floatingAnimations.map((anim) => (
+          <div
+            key={anim.id}
+            className={`fixed ${
+              anim.type === "points" ? "left-1/3" : "right-1/3"
+            } top-1/2 animate-bounce text-2xl font-bold drop-shadow-lg`}
+            style={{
+              animation: `float-up 2s ease-out forwards`,
+              color: anim.type === "points" ? "#FFD700" : "#4F46E5",
+            }}
+          >
+            +{anim.amount}
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes float-up {
+          0% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-100px);
+          }
+        }
+      `}</style>
     </div>
   );
 }
