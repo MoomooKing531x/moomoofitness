@@ -710,7 +710,7 @@ export default function RepDefenseGame() {
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {troopTypes
-              .sort((a, b) => a.cost - b.cost) // Sort by cost (cheapest first)
+              .sort((a, b) => b.cost - a.cost) // Sort by cost (most expensive first)
               .map((troop) => {
               const difficultyMultiplier = {
                 easy: 0.5,
