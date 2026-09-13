@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import AvatarPreview from "./AvatarPreview";
-import { SHOP_ITEMS } from "../lib/shopConstants";
+import { SHOP_ITEMS } from "../../lib/shopConstants";
 
 export default function ClothingCustomizer() {
   const [isOpen, setIsOpen] = useState(false);
