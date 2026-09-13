@@ -44,8 +44,6 @@ export default function ClothingCustomizer() {
         let items = [];
         try {
           items = JSON.parse(meData.user.ownedItems || "[]");
-          console.log("Locker - Owned items from DB:", items); // Debug log
-          console.log("Locker - Looking for item IDs:", SHOP_ITEMS.hats.map(h => h.id)); // Debug log
         } catch {
           items = [];
         }
