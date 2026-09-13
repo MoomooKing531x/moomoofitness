@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 const CATEGORY_LABELS = {
@@ -42,6 +42,36 @@ export default function LogForm({ exercises }) {
   const [floatingAnimations, setFloatingAnimations] = useState([]);
   const [encouragementMsg, setEncouragementMsg] = useState("");
   const [showEncouragement, setShowEncouragement] = useState(false);
+
+  // Load saved values from localStorage on mount
+  useEffect(() => {
+    const savedSelectedId = localStorage.getItem("logForm_selectedId");
+    const savedCustomName = localStorage.getItem("logForm_customName");
+    const savedReps = localStorage.getItem("logForm_reps");
+    const savedSets = localStorage.getItem("logForm_sets");
+
+    if (savedSelectedId) setSelectedId(savedSelectedId);
+    if (savedCustomName) setCustomName(savedCustomName);
+    if (savedReps) setReps(savedReps);
+    if (savedSets) setSets(savedSets);
+  }, []);
+
+  // Save values to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem("logForm_selectedId", selectedId);
+  }, [selectedId]);
+
+  useEffect(() => {
+    localStorage.setItem("logForm_customName", customName);
+  }, [customName]);
+
+  useEffect(() => {
+    localStorage.setItem("logForm_reps", reps);
+  }, [reps]);
+
+  useEffect(() => {
+    localStorage.setItem("logForm_sets", sets);
+  }, [sets]);
 
   const grouped = exercises.reduce((acc, ex) => {
     acc[ex.category] = acc[ex.category] || [];
@@ -154,9 +184,10 @@ export default function LogForm({ exercises }) {
       setMessage(`Logged! Streak: ${data.currentStreak} day${data.currentStreak === 1 ? "" : "s"} 🔥`);
       // Dispatch event to notify bet components to refresh
       window.dispatchEvent(new CustomEvent("betsUpdated"));
-      setReps("");
-      setSets("1");
-      if (isOthers) setCustomName("");
+      // Don't reset values - keep them for convenience
+      // setReps("");
+      // setSets("1");
+      // if (isOthers) setCustomName("");
       router.refresh();
     } catch (error) {
       console.error("Error logging exercise:", error);

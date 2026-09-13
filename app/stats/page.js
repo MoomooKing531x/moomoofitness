@@ -4,6 +4,7 @@ import { prisma } from "../../lib/db";
 import { getUserIdFromCookies } from "../../lib/auth";
 import Navbar from "../../components/Navbar";
 import { getStreakDisplay } from "../../lib/streak";
+import ResetAccountButton from "../../components/ResetAccountButton";
 
 export default async function StatsPage() {
   const userId = getUserIdFromCookies();
@@ -110,6 +111,8 @@ export default async function StatsPage() {
             </div>
           )}
         </div>
+
+        <ResetAccountButton />
       </main>
     </div>
   );
