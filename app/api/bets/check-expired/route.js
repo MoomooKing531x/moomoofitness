@@ -1,5 +1,7 @@
 import { prisma } from "../../../../lib/db.js";
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/bets/check-expired
 // Checks for pending bets older than 24 hours and refunds them
 export async function GET(request) {
